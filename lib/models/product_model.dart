@@ -10,7 +10,7 @@ class Product {
   final String contactMethod;
   final String phone;
   final String whatsapp;
-  final String imageUrl; // Changed from List<File> images to String imageUrl
+  final String imageUrl;
   final Timestamp? timestamp;
   final int likes;
   final int views;
@@ -113,5 +113,25 @@ class Product {
       ownerName: ownerName ?? this.ownerName,
       ownerAvatar: ownerAvatar ?? this.ownerAvatar,
     );
+  }
+
+  // Helper methods for Product
+
+  // Format price with currency
+  String get formattedPrice => '$price JD';
+
+  // Check if product has image
+  bool get hasImage => imageUrl.isNotEmpty;
+
+  // Get formatted timestamp
+  String get formattedDate {
+    if (timestamp == null) return '';
+    final date = timestamp!.toDate();
+    return '${date.day}/${date.month}/${date.year}';
+  }
+
+  // Check if user is owner
+  bool isOwner(String? userId) {
+    return ownerId != null && ownerId == userId;
   }
 }

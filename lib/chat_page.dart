@@ -1,27 +1,63 @@
+// lib/chat_page.dart
+
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
+// تعريف نموذج Message للاستخدام الداخلي
+class Message {
+  final String? id;
+  final String senderId;
+  final String text;
+  final String imageUrl;
+  final DateTime timestamp;
+  final String type;
+  final bool isRead;
+
+  Message({
+    this.id,
+    required this.senderId,
+    required this.text,
+    required this.imageUrl,
+    required this.timestamp,
+    required this.type,
+    required this.isRead,
+  });
+
+  factory Message.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    final timestamp = data['timestamp'] as Timestamp?;
+
+    return Message(
+      id: doc.id,
+      senderId: data['senderId'] ?? '',
+      text: data['text'] ?? '',
+      imageUrl: data['imageUrl'] ?? '',
+      timestamp: timestamp?.toDate() ?? DateTime.now(),
+      type: data['type'] ?? 'text',
+      isRead: data['isRead'] ?? false,
+    );
+  }
+}
+
+// صفحة المحادثة بالمعلمات الجديدة فقط
 class ChatPage extends StatefulWidget {
-  final String receiverId;
-  final String receiverName;
-  final String receiverAvatar;
-  final String userName;
-  final String userAvatar;
+  final String chatRoomId;
+  final String recipientId;
+  final String recipientName;
+  final String recipientAvatar;
 
   const ChatPage({
-    super.key,
-    required this.receiverId,
-    required this.receiverName,
-    required this.receiverAvatar,
-    required this.userName,
-    required this.userAvatar,
-  });
+    Key? key,
+    required this.chatRoomId,
+    required this.recipientId,
+    required this.recipientName,
+    required this.recipientAvatar,
+  }) : super(key: key);
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -30,34 +66,33 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final FocusNode _textFieldFocus = FocusNode();
-  final userId = FirebaseAuth.instance.currentUser!.uid;
-  late final String chatRoomId;
+  final ImagePicker _imagePicker = ImagePicker();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // متغيرات لتتبع الحالات
   bool _isOnline = false;
-  DateTime? _lastSeen;
   bool _isTyping = false;
-  bool _showEmojiPicker = false;
+  bool _isRecipientTyping = false;
+  bool _isLoadingImage = false;
+  DateTime? _lastSeen;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    chatRoomId = getChatRoomId(userId, widget.receiverId);
-    _setupChatRoom();
     _markMessagesAsRead();
-    _updateOnlineStatus(true);
-    _listenToTyping();
-    _listenToOnlineStatus();
+    _listenToRecipientStatus();
+    _messageController.addListener(_handleTyping);
   }
 
   @override
   void dispose() {
-    _updateOnlineStatus(false);
-    WidgetsBinding.instance.removeObserver(this);
+    _messageController.removeListener(_handleTyping);
     _messageController.dispose();
     _scrollController.dispose();
-    _textFieldFocus.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _resetTypingStatus();
     super.dispose();
   }
 
@@ -66,183 +101,210 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _updateOnlineStatus(true);
-    } else if (state == AppLifecycleState.paused) {
+    } else {
       _updateOnlineStatus(false);
     }
   }
 
-  String getChatRoomId(String uid1, String uid2) {
-    return uid1.compareTo(uid2) < 0 ? '${uid1}_$uid2' : '${uid2}_$uid1';
-  }
+  // تحديث حالة الاتصال
+  Future<void> _updateOnlineStatus(bool isOnline) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
 
-  Future<void> _setupChatRoom() async {
-    final chatRoomRef = FirebaseFirestore.instance.collection('chat_rooms').doc(chatRoomId);
-
-    await chatRoomRef.set({
-      'users': [userId, widget.receiverId],
-      'userNames': {
-        userId: widget.userName,
-        widget.receiverId: widget.receiverName,
-      },
-      'userAvatars': {
-        userId: widget.userAvatar,
-        widget.receiverId: widget.receiverAvatar,
-      },
-      'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-  }
-
-  Future<void> _markMessagesAsRead() async {
-    final chatRoomRef = FirebaseFirestore.instance.collection('chat_rooms').doc(chatRoomId);
-
-    await chatRoomRef.update({
-      'unreadCount.$userId': 0,
+    await _firestore.collection('users').doc(user.uid).update({
+      'isOnline': isOnline,
+      'lastSeen': FieldValue.serverTimestamp(),
     });
   }
 
-  void _updateOnlineStatus(bool isOnline) {
-    FirebaseFirestore.instance.collection('user_status').doc(userId).set({
-      'isOnline': isOnline,
-      'lastSeen': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+  // وضع علامة على الرسائل كمقروءة
+  Future<void> _markMessagesAsRead() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    // تحديث عدد الرسائل غير المقروءة
+    await _firestore.collection('chat_rooms').doc(widget.chatRoomId).update({
+      'unreadCount.${user.uid}': 0,
+    });
+
+    // تحديث حالة القراءة للرسائل
+    final unreadMessages = await _firestore
+        .collection('chat_rooms')
+        .doc(widget.chatRoomId)
+        .collection('messages')
+        .where('senderId', isNotEqualTo: user.uid)
+        .where('isRead', isEqualTo: false)
+        .get();
+
+    final batch = _firestore.batch();
+    for (var doc in unreadMessages.docs) {
+      batch.update(doc.reference, {'isRead': true});
+    }
+
+    await batch.commit();
   }
 
-  void _listenToOnlineStatus() {
-    FirebaseFirestore.instance
-        .collection('user_status')
-        .doc(widget.receiverId)
+  // الاستماع إلى حالة المستخدم الآخر
+  void _listenToRecipientStatus() {
+    _firestore
+        .collection('users')
+        .doc(widget.recipientId)
         .snapshots()
-        .listen((doc) {
-      if (doc.exists && mounted) {
-        final data = doc.data()!;
+        .listen((snapshot) {
+      if (snapshot.exists && mounted) {
         setState(() {
-          _isOnline = data['isOnline'] ?? false;
-          _lastSeen = (data['lastSeen'] as Timestamp?)?.toDate();
+          _isOnline = snapshot.data()?['isOnline'] ?? false;
+          _lastSeen = (snapshot.data()?['lastSeen'] as Timestamp?)?.toDate();
         });
       }
     });
-  }
 
-  void _listenToTyping() {
-    FirebaseFirestore.instance
+    // الاستماع إلى حالة الكتابة
+    _firestore
         .collection('chat_rooms')
-        .doc(chatRoomId)
+        .doc(widget.chatRoomId)
         .snapshots()
-        .listen((doc) {
-      if (doc.exists && mounted) {
-        final data = doc.data()!;
-        final typingData = data['typing'] as Map<String, dynamic>? ?? {};
-        final otherUserTyping = typingData[widget.receiverId] ?? false;
-
-        if (_isTyping != otherUserTyping) {
+        .listen((snapshot) {
+      if (snapshot.exists && mounted) {
+        final typing = snapshot.data()?['typing'] as Map<String, dynamic>?;
+        if (typing != null) {
+          final isRecipientTyping = typing[widget.recipientId] ?? false;
           setState(() {
-            _isTyping = otherUserTyping;
+            _isRecipientTyping = isRecipientTyping;
           });
         }
       }
     });
   }
 
-  void _updateTypingStatus(bool isTyping) {
-    FirebaseFirestore.instance.collection('chat_rooms').doc(chatRoomId).update({
-      'typing.$userId': isTyping,
-    });
-  }
-
-  Future<void> _sendMessage({String? text, String? imageUrl, String type = 'text'}) async {
-    final messageText = text ?? _messageController.text.trim();
-    if (messageText.isEmpty && imageUrl == null) return;
-
-    _messageController.clear();
-    _updateTypingStatus(false);
-
-    final messageData = {
-      'senderId': userId,
-      'senderName': widget.userName,
-      'senderAvatar': widget.userAvatar,
-      'text': messageText,
-      'imageUrl': imageUrl,
-      'type': type,
-      'timestamp': FieldValue.serverTimestamp(),
-      'chatId': chatRoomId,
-      'isRead': false,
-    };
-
-    // Add message to subcollection
-    await FirebaseFirestore.instance
-        .collection('chat_rooms')
-        .doc(chatRoomId)
-        .collection('messages')
-        .add(messageData);
-
-    // Update chat room info
-    await FirebaseFirestore.instance.collection('chat_rooms').doc(chatRoomId).update({
-      'lastMessage': type == 'text' ? messageText : '📷 Photo',
-      'lastMessageType': type,
-      'lastMessageTime': FieldValue.serverTimestamp(),
-      'unreadCount.${widget.receiverId}': FieldValue.increment(1),
-    });
-
-    _scrollToBottom();
-  }
-
-  Future<void> _sendImage() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-
-    if (pickedFile == null) return;
-
-    // Show loading dialog
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(
-        child: CircularProgressIndicator(),
-      ),
-    );
-
-    try {
-      // Upload image to Firebase Storage
-      final file = File(pickedFile.path);
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('chat_images')
-          .child(chatRoomId)
-          .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
-
-      final uploadTask = await storageRef.putFile(file);
-      final imageUrl = await uploadTask.ref.getDownloadURL();
-
-      // Close loading dialog
-      if (mounted) Navigator.pop(context);
-
-      // Send message with image
-      await _sendMessage(imageUrl: imageUrl, type: 'image');
-
-    } catch (e) {
-      // Close loading dialog
-      if (mounted) Navigator.pop(context);
-
-      // Show error
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send image: $e')),
-      );
+  // التعامل مع حالة الكتابة
+  void _handleTyping() {
+    final isCurrentlyTyping = _messageController.text.isNotEmpty;
+    if (isCurrentlyTyping != _isTyping) {
+      setState(() => _isTyping = isCurrentlyTyping);
+      _updateTypingStatus(isCurrentlyTyping);
     }
   }
 
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          0,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
+  // تحديث حالة الكتابة
+  Future<void> _updateTypingStatus(bool isTyping) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    await _firestore.collection('chat_rooms').doc(widget.chatRoomId).update({
+      'typing.${user.uid}': isTyping,
     });
   }
 
-  String _getOnlineStatus() {
+  // إعادة ضبط حالة الكتابة عند مغادرة الدردشة
+  void _resetTypingStatus() {
+    _updateTypingStatus(false);
+  }
+
+  // إرسال رسالة نصية
+  Future<void> _sendMessage() async {
+    final text = _messageController.text.trim();
+    if (text.isEmpty) return;
+
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    final timestamp = FieldValue.serverTimestamp();
+
+    // إضافة الرسالة إلى مجموعة الرسائل
+    await _firestore
+        .collection('chat_rooms')
+        .doc(widget.chatRoomId)
+        .collection('messages')
+        .add({
+      'senderId': user.uid,
+      'text': text,
+      'imageUrl': '',
+      'timestamp': timestamp,
+      'type': 'text',
+      'isRead': false,
+    });
+
+    // تحديث آخر رسالة في غرفة المحادثة
+    await _firestore.collection('chat_rooms').doc(widget.chatRoomId).update({
+      'lastMessage': text,
+      'lastMessageTime': timestamp,
+      'lastMessageType': 'text',
+      'unreadCount.${widget.recipientId}': FieldValue.increment(1),
+    });
+
+    _messageController.clear();
+    _scrollToBottom();
+  }
+
+  // اختيار وإرسال صورة
+  Future<void> _pickAndSendImage() async {
+    final pickedFile = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 70,
+    );
+
+    if (pickedFile != null) {
+      setState(() => _isLoadingImage = true);
+
+      try {
+        final user = _auth.currentUser;
+        if (user == null) return;
+
+        final imageFile = File(pickedFile.path);
+        final timestamp = FieldValue.serverTimestamp();
+
+        // رفع الصورة إلى Firebase Storage
+        final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('chat_images')
+            .child(widget.chatRoomId)
+            .child(fileName);
+
+        // تنفيذ الرفع
+        final uploadTask = await storageRef.putFile(imageFile);
+        final imageUrl = await uploadTask.ref.getDownloadURL();
+
+        // إضافة الرسالة إلى مجموعة الرسائل
+        await _firestore
+            .collection('chat_rooms')
+            .doc(widget.chatRoomId)
+            .collection('messages')
+            .add({
+          'senderId': user.uid,
+          'text': '',
+          'imageUrl': imageUrl,
+          'timestamp': timestamp,
+          'type': 'image',
+          'isRead': false,
+        });
+
+        // تحديث آخر رسالة في غرفة المحادثة
+        await _firestore.collection('chat_rooms').doc(widget.chatRoomId).update({
+          'lastMessage': '📷 Photo',
+          'lastMessageTime': timestamp,
+          'lastMessageType': 'image',
+          'unreadCount.${widget.recipientId}': FieldValue.increment(1),
+        });
+
+        _scrollToBottom();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to send image: $e')),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoadingImage = false);
+        }
+      }
+    }
+  }
+
+  // تنسيق حالة الاتصال
+  String _formatOnlineStatus() {
     if (_isOnline) {
       return 'Online';
     } else if (_lastSeen != null) {
@@ -255,6 +317,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         return '${difference.inMinutes}m ago';
       } else if (difference.inDays < 1) {
         return '${difference.inHours}h ago';
+      } else if (difference.inDays < 7) {
+        return '${difference.inDays}d ago';
       } else {
         return DateFormat('MMM d').format(_lastSeen!);
       }
@@ -262,107 +326,17 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     return 'Offline';
   }
 
-  Widget _buildMessage(Map<String, dynamic> msg, bool isMe) {
-    final time = (msg['timestamp'] as Timestamp?)?.toDate();
-    final formattedTime = time != null ? DateFormat.jm().format(time) : '';
-    final messageType = msg['type'] ?? 'text';
-
-    return Container(
-      margin: EdgeInsets.only(
-        left: isMe ? 50 : 10,
-        right: isMe ? 10 : 50,
-        top: 2,
-        bottom: 2,
-      ),
-      child: Column(
-        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: isMe ? const Color(0xFF3B3B98) : Colors.grey[300],
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(20),
-                topRight: const Radius.circular(20),
-                bottomLeft: Radius.circular(isMe ? 20 : 5),
-                bottomRight: Radius.circular(isMe ? 5 : 20),
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (messageType == 'image' && msg['imageUrl'] != null)
-                  Container(
-                    constraints: const BoxConstraints(maxWidth: 200, maxHeight: 200),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        msg['imageUrl'],
-                        fit: BoxFit.cover,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Container(
-                            height: 100,
-                            width: 100,
-                            color: Colors.grey[300],
-                            child: const Center(child: CircularProgressIndicator()),
-                          );
-                        },
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            height: 100,
-                            width: 100,
-                            color: Colors.grey[300],
-                            child: const Icon(Icons.error),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                if (msg['text'] != null && msg['text'].toString().isNotEmpty)
-                  Padding(
-                    padding: EdgeInsets.only(top: messageType == 'image' ? 8 : 0),
-                    child: SelectableText(
-                      msg['text'] ?? '',
-                      style: TextStyle(
-                        color: isMe ? Colors.white : Colors.black87,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.only(
-              left: isMe ? 0 : 8,
-              right: isMe ? 8 : 0,
-              top: 4,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  formattedTime,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                if (isMe) ...[
-                  const SizedBox(width: 4),
-                  Icon(
-                    msg['isRead'] == true ? Icons.done_all : Icons.done,
-                    size: 16,
-                    color: msg['isRead'] == true ? Colors.blue : Colors.grey,
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  // التمرير إلى أسفل المحادثة
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      Future.delayed(const Duration(milliseconds: 100), () {
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      });
+    }
   }
 
   @override
@@ -370,63 +344,38 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF3B3B98),
-        elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
         title: Row(
           children: [
-            Stack(
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: Colors.grey[300],
-                  backgroundImage: widget.receiverAvatar.isNotEmpty
-                      ? NetworkImage(widget.receiverAvatar)
-                      : null,
-                  child: widget.receiverAvatar.isEmpty
-                      ? Text(
-                    widget.receiverName.isNotEmpty
-                        ? widget.receiverName[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  )
-                      : null,
-                ),
-                if (_isOnline)
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                    ),
-                  ),
-              ],
+            CircleAvatar(
+              backgroundColor: Colors.grey[300],
+              backgroundImage: widget.recipientAvatar.isNotEmpty
+                  ? NetworkImage(widget.recipientAvatar)
+                  : null,
+              radius: 16,
+              child: widget.recipientAvatar.isEmpty
+                  ? Text(
+                widget.recipientName[0].toUpperCase(),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              )
+                  : null,
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    widget.receiverName,
+                    widget.recipientName,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
-                      fontWeight: FontWeight.w600,
                     ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    _isTyping ? 'Typing...' : _getOnlineStatus(),
+                    _isRecipientTyping ? 'Typing...' : _formatOnlineStatus(),
                     style: TextStyle(
-                      color: _isTyping ? Colors.greenAccent : Colors.white70,
+                      color: _isRecipientTyping ? Colors.greenAccent : Colors.white70,
                       fontSize: 12,
                     ),
                   ),
@@ -437,9 +386,12 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
+            icon: const Icon(Icons.call, color: Colors.white),
             onPressed: () {
-              // Show options menu
+              // Handle call action
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Call feature coming soon')),
+              );
             },
           ),
         ],
@@ -448,34 +400,41 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         children: [
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
+              stream: _firestore
                   .collection('chat_rooms')
-                  .doc(chatRoomId)
+                  .doc(widget.chatRoomId)
                   .collection('messages')
                   .orderBy('timestamp', descending: true)
                   .limit(50)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B3B98)),
+                    ),
+                  );
                 }
 
                 if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
+                  return Center(
+                    child: Text('Error: ${snapshot.error}'),
+                  );
                 }
 
                 if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey),
-                        SizedBox(height: 16),
-                        Text(
+                        Icon(Icons.chat_bubble_outline, size: 64, color: Colors.grey[400]),
+                        const SizedBox(height: 16),
+                        const Text(
                           'No messages yet',
-                          style: TextStyle(color: Colors.grey, fontSize: 16),
+                          style: TextStyle(fontSize: 18, color: Colors.grey),
                         ),
-                        Text(
+                        const SizedBox(height: 8),
+                        const Text(
                           'Send a message to start the conversation',
                           style: TextStyle(color: Colors.grey),
                         ),
@@ -484,83 +443,214 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   );
                 }
 
-                final messages = snapshot.data!.docs;
+                // Mark messages as read when viewing them
+                _markMessagesAsRead();
+
+                final messages = snapshot.data!.docs.map((doc) => Message.fromFirestore(doc)).toList();
 
                 return ListView.builder(
                   controller: _scrollController,
                   reverse: true,
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
-                    final msg = messages[index].data() as Map<String, dynamic>;
-                    final isMe = msg['senderId'] == userId;
+                    final message = messages[index];
+                    final isMe = message.senderId == _auth.currentUser!.uid;
 
-                    return _buildMessage(msg, isMe);
+                    return _buildMessageBubble(message, isMe);
                   },
                 );
               },
             ),
           ),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: Colors.grey[300]!)),
+          _buildInputArea(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(Message message, bool isMe) {
+    final time = DateFormat('h:mm a').format(message.timestamp);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!isMe)
+            CircleAvatar(
+              radius: 16,
+              backgroundImage: widget.recipientAvatar.isNotEmpty
+                  ? NetworkImage(widget.recipientAvatar)
+                  : null,
+              child: widget.recipientAvatar.isEmpty
+                  ? Text(
+                widget.recipientName[0].toUpperCase(),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              )
+                  : null,
             ),
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.photo_camera, color: Color(0xFF3B3B98)),
-                      onPressed: _sendImage,
-                    ),
-                    Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(25),
-                        ),
-                        child: TextField(
-                          controller: _messageController,
-                          focusNode: _textFieldFocus,
-                          maxLines: null,
-                          textInputAction: TextInputAction.newline,
-                          decoration: const InputDecoration(
-                            hintText: 'Type a message...',
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 10,
+
+          if (!isMe) const SizedBox(width: 8),
+
+          Flexible(
+            child: Container(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.7,
+              ),
+              padding: message.type == 'image'
+                  ? const EdgeInsets.all(3)
+                  : const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: isMe ? const Color(0xFF3B3B98) : Colors.grey[300],
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (message.type == 'image' && message.imageUrl.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(15),
+                      child: GestureDetector(
+                        onTap: () {
+                          // Show full image
+                          showDialog(
+                            context: context,
+                            builder: (_) => Dialog(
+                              child: Image.network(message.imageUrl),
                             ),
-                            border: InputBorder.none,
-                          ),
-                          onChanged: (text) {
-                            final isCurrentlyTyping = text.isNotEmpty;
-                            if (isCurrentlyTyping != _isTyping) {
-                              _updateTypingStatus(isCurrentlyTyping);
-                            }
+                          );
+                        },
+                        child: Image.network(
+                          message.imageUrl,
+                          width: 200,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return SizedBox(
+                              width: 200,
+                              height: 150,
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  value: loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                      (loadingProgress.expectedTotalBytes ?? 1)
+                                      : null,
+                                ),
+                              ),
+                            );
                           },
-                          onSubmitted: (_) => _sendMessage(),
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 200,
+                              height: 150,
+                              color: Colors.grey[300],
+                              child: const Center(
+                                child: Icon(Icons.error_outline),
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF3B3B98),
-                        shape: BoxShape.circle,
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.send, color: Colors.white),
-                        onPressed: () => _sendMessage(),
+
+                  if (message.text.isNotEmpty)
+                    Padding(
+                      padding: message.type == 'image'
+                          ? const EdgeInsets.fromLTRB(13, 8, 13, 5)
+                          : EdgeInsets.zero,
+                      child: Text(
+                        message.text,
+                        style: TextStyle(
+                          color: isMe ? Colors.white : Colors.black87,
+                          fontSize: 16,
+                        ),
                       ),
                     ),
-                  ],
-                ),
+                ],
               ),
             ),
           ),
+
+          if (isMe) const SizedBox(width: 8),
+
+          if (isMe)
+            Text(
+              time,
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.grey[600],
+              ),
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildInputArea() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            offset: const Offset(0, -2),
+            blurRadius: 4,
+            color: Colors.black.withOpacity(0.1),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.photo),
+              color: const Color(0xFF3B3B98),
+              onPressed: _isLoadingImage ? null : _pickAndSendImage,
+            ),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: TextField(
+                  controller: _messageController,
+                  decoration: const InputDecoration(
+                    hintText: 'Type a message',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  maxLines: null,
+                  textCapitalization: TextCapitalization.sentences,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFF3B3B98),
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: _isLoadingImage
+                    ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+                    : const Icon(Icons.send),
+                color: Colors.white,
+                onPressed: _isLoadingImage ? null : _sendMessage,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

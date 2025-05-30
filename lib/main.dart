@@ -1,3 +1,4 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -12,7 +13,7 @@ import 'verify_code_page.dart';
 import 'home_page.dart';
 import 'firebase_options.dart';
 import 'services/notification_service.dart';
-
+import 'app_theme.dart';
 // 🔔 Local notifications plugin instance
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
@@ -82,18 +83,16 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-
-    // ✅ فحص حالة المستخدم الحالية
     final User? user = FirebaseAuth.instance.currentUser;
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: themeProvider.isDarkMode ? ThemeData.dark() : ThemeData.light(),
+      title: 'JUST STORE',
+      theme: themeProvider.currentTheme,
       home: user != null ? const HomePage() : const SplashScreen(),
       routes: {
         '/home': (context) => const HomePage(),
         '/verify': (context) => const VerifyCodePage(email: 'test@example.com'),
-        // '/notifications': (context) => NotificationsPage(),
       },
     );
   }

@@ -47,7 +47,7 @@ class _DentalEquipmentPageState extends State<DentalEquipmentPage> {
                 stream: FirebaseFirestore.instance
                     .collection('products')
                     .where('category', isEqualTo: 'Dental Equipment')
-                    .orderBy('title')
+                    .orderBy('timestamp', descending: true) // ترتيب حسب التاريخ
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
@@ -55,53 +55,151 @@ class _DentalEquipmentPageState extends State<DentalEquipmentPage> {
                   }
 
                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Center(child: Text('No dental equipment found.'));
+                    return const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.medical_services, size: 64, color: Colors.grey),
+                          SizedBox(height: 16),
+                          Text(
+                            'No dental equipment found.',
+                            style: TextStyle(fontSize: 18, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    );
                   }
 
+                  // فلترة البيانات مباشرة من المستندات
                   final filtered = snapshot.data!.docs.where((doc) {
                     final data = doc.data() as Map<String, dynamic>;
-                    final title = data['title']?.toString().toLowerCase() ?? '';
-                    return title.contains(_search.toLowerCase());
+                    final name = data['name']?.toString().toLowerCase() ?? '';
+                    final description = data['description']?.toString().toLowerCase() ?? '';
+                    final searchLower = _search.toLowerCase();
+                    return name.contains(searchLower) || description.contains(searchLower);
                   }).toList();
+
+                  if (filtered.isEmpty) {
+                    return const Center(
+                      child: Text('No equipment matches your search.',
+                          style: TextStyle(fontSize: 16, color: Colors.grey)),
+                    );
+                  }
 
                   return ListView.builder(
                     itemCount: filtered.length,
                     itemBuilder: (context, index) {
-                      final data = filtered[index].data() as Map<String, dynamic>;
+                      final doc = filtered[index];
+                      final data = doc.data() as Map<String, dynamic>;
+
                       return Card(
                         margin: const EdgeInsets.only(bottom: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                         elevation: 3,
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.all(12),
-                          leading: data['imageUrl'] != null
-                              ? Image.network(data['imageUrl'], width: 60, fit: BoxFit.cover)
-                              : const Icon(Icons.medical_services, size: 40),
-                          title: Text(data['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text(data['description'] ?? ''),
-                          trailing: ElevatedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => DentalEquipmentDetailsPage(
-                                    image: data['imageUrl'] ?? '',
-                                    title: data['title'] ?? '',
-                                    description: data['description'] ?? '',
-                                    price: data['price'] ?? '',
-                                    phoneNumber: data['phone'] ?? '',
-                                    receiverId: data['ownerId'] ?? '',
-                                    receiverName: data['ownerName'] ?? 'Seller',
-                                    receiverAvatar: data['ownerAvatar'] ?? '',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(15),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => DentalEquipmentDetailsPage(
+                                  image: data['imageUrl'] ?? '',
+                                  title: data['name'] ?? '',
+                                  description: data['description'] ?? '',
+                                  price: data['price'] ?? '',
+                                  phoneNumber: data['phone'] ?? '',
+                                  recipientId: data['ownerId'] ?? '',
+                                  recipientName: data['ownerName'] ?? 'Seller',
+                                  recipientAvatar: data['ownerAvatar'] ?? '',
+                                ),
+                              ),
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
+                              children: [
+                                // صورة المعدات الطبية
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: (data['imageUrl'] ?? '').isNotEmpty
+                                      ? Image.network(
+                                    data['imageUrl'],
+                                    width: 80,
+                                    height: 80,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) =>
+                                        Container(
+                                          width: 80,
+                                          height: 80,
+                                          color: Colors.grey[300],
+                                          child: const Icon(Icons.image_not_supported),
+                                        ),
+                                  )
+                                      : Container(
+                                    width: 80,
+                                    height: 80,
+                                    color: Colors.grey[300],
+                                    child: const Icon(Icons.medical_services, size: 40),
                                   ),
                                 ),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF3B3B98),
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
+                                const SizedBox(width: 12),
+                                // تفاصيل المعدات
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        data['name'] ?? 'Unnamed Equipment',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        data['description'] ?? 'No description',
+                                        style: TextStyle(
+                                          color: isDark ? Colors.grey[300] : Colors.grey[600],
+                                          fontSize: 14,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          Text(
+                                            '${data['price'] ?? '0'} JD',
+                                            style: const TextStyle(
+                                              color: Colors.green,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                          const Spacer(),
+                                          Text(
+                                            'by ${data['ownerName'] ?? 'Unknown'}',
+                                            style: TextStyle(
+                                              color: Colors.grey[500],
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // أيقونة العرض
+                                const Icon(
+                                  Icons.arrow_forward_ios,
+                                  size: 16,
+                                  color: Colors.grey,
+                                ),
+                              ],
                             ),
-                            child: const Text('View'),
                           ),
                         ),
                       );

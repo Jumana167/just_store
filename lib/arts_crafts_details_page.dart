@@ -1,6 +1,9 @@
+// arts_crafts_details_page.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'chat_page.dart';
+import '../services/chat_service.dart';
 
 class ArtsCraftsDetailsPage extends StatelessWidget {
   final String image;
@@ -8,9 +11,9 @@ class ArtsCraftsDetailsPage extends StatelessWidget {
   final String description;
   final String price;
   final String phoneNumber;
-  final String receiverId;
-  final String receiverName;
-  final String receiverAvatar; // ✅ أضفناها
+  final String recipientId;
+  final String recipientName;
+  final String recipientAvatar;
 
   const ArtsCraftsDetailsPage({
     super.key,
@@ -19,15 +22,27 @@ class ArtsCraftsDetailsPage extends StatelessWidget {
     required this.description,
     required this.price,
     required this.phoneNumber,
-    required this.receiverId,
-    required this.receiverName,
-    required this.receiverAvatar, // ✅ أضفناها
+    required this.recipientId,
+    required this.recipientName,
+    required this.recipientAvatar,
   });
+
+  // Function to make phone call
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final Uri launchUri = Uri(
+      scheme: 'tel',
+      path: phoneNumber,
+    );
+    if (await canLaunchUrl(launchUri)) {
+      await launchUrl(launchUri);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final user = FirebaseAuth.instance.currentUser;
+    final isOwnProduct = user?.uid == recipientId;
 
     return Scaffold(
       appBar: AppBar(
@@ -37,99 +52,242 @@ class ArtsCraftsDetailsPage extends StatelessWidget {
         centerTitle: true,
       ),
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            // صورة المنتج
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: Image.network(
+              child: image.isNotEmpty
+                  ? Image.network(
                 image,
                 width: double.infinity,
-                height: 200,
+                height: 250,
                 fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  width: double.infinity,
+                  height: 250,
+                  color: Colors.grey[300],
+                  child: const Icon(Icons.image_not_supported, size: 64),
+                ),
+              )
+                  : Container(
+                width: double.infinity,
+                height: 250,
+                color: Colors.grey[300],
+                child: const Icon(Icons.palette, size: 64),
               ),
             ),
             const SizedBox(height: 20),
+
+            // اسم المنتج
             Text(
               title,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 10),
+
+            // الوصف
             Text(
               description,
               style: TextStyle(
                 fontSize: 16,
-                color: isDark ? Colors.grey[300] : Colors.grey[800],
+                color: isDark ? Colors.grey[300] : Colors.grey[700],
+                height: 1.5,
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
-            Text(
-              '$price JD',
-              style: const TextStyle(
-                fontSize: 20,
-                color: Colors.green,
-                fontWeight: FontWeight.bold,
+
+            // السعر
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(25),
+                border: Border.all(color: Colors.green),
+              ),
+              child: Text(
+                '$price JD',
+                style: const TextStyle(
+                  fontSize: 22,
+                  color: Colors.green,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
             const SizedBox(height: 30),
-            const Text(
-              'Contact Seller',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (_) => AlertDialog(
-                        title: const Text('Call Seller'),
-                        content: Text('Phone: $phoneNumber'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Close'),
+
+            // معلومات البائع
+            if (!isOwnProduct) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey[800] : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 25,
+                      backgroundImage: recipientAvatar.isNotEmpty
+                          ? NetworkImage(recipientAvatar)
+                          : null,
+                      child: recipientAvatar.isEmpty
+                          ? const Icon(Icons.person)
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Seller',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          Text(
+                            recipientName,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ],
                       ),
-                    );
-                  },
-                  icon: const Icon(Icons.call),
-                  label: const Text('Call'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  ),
+                    ),
+                  ],
                 ),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ChatPage(
-                          receiverId: receiverId,
-                          receiverName: receiverName,
-                          receiverAvatar: receiverAvatar, // ✅ استخدمناها
-                          userName: user?.displayName ?? 'Guest',
-                          userAvatar: user?.photoURL ?? '',
+              ),
+              const SizedBox(height: 30),
+
+              // أزرار التواصل
+              const Text(
+                'Contact Seller',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 16),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: phoneNumber.isNotEmpty
+                          ? () => _makePhoneCall(phoneNumber)
+                          : null,
+                      icon: const Icon(Icons.call, color: Colors.white),
+                      label: const Text('Call', style: TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                    );
-                  },
-                  icon: const Icon(Icons.chat),
-                  label: const Text('Chat'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF3B3B98),
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    ),
                   ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        if (user == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Please login to chat')),
+                          );
+                          return;
+                        }
+
+                        try {
+                          // Create chat service instance
+                          final chatService = ChatService();
+
+                          // Show loading
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (_) => const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          );
+
+                          // Create or get chat room ID
+                          final String chatRoomId = await chatService.createOrGetChatRoom(
+                            recipientId,
+                            recipientName,
+                            recipientAvatar,
+                          );
+
+                          if (!context.mounted) return;
+
+                          // Hide loading
+                          Navigator.pop(context);
+
+                          // Navigate to chat page
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ChatPage(
+                                chatRoomId: chatRoomId,
+                                recipientId: recipientId,
+                                recipientName: recipientName,
+                                recipientAvatar: recipientAvatar,
+                              ),
+                            ),
+                          );
+                        } catch (e) {
+                          if (context.mounted) {
+                            Navigator.pop(context); // Hide loading
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Error starting chat: $e')),
+                            );
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.chat, color: Colors.white),
+                      label: const Text('Chat', style: TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF3B3B98),
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              // إذا كان المنتج ملك المستخدم الحالي
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blue),
                 ),
-              ],
-            ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info, color: Colors.blue),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'This is your product',
+                        style: TextStyle(
+                          color: Colors.blue,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
