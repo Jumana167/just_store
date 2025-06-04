@@ -11,6 +11,7 @@ import 'security_settings_page.dart';
 import 'recent_activities_page.dart';
 import 'login_page_v2.dart';
 import 'chat_list_page.dart';
+import 'app_theme.dart';
 
 class ProfilePage extends StatefulWidget {
   final String userName;
@@ -93,12 +94,13 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).cardColor,
         title: const Text('Logout Confirmation'),
         content: const Text('Do you want to logout?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('No'),
+            child: const Text('No', style: TextStyle(color: AppTheme.mediumGrey)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -110,7 +112,8 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                     (route) => false,
               );
             },
-            child: const Text('Yes'),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primaryBlue),
+            child: const Text('Yes', style: TextStyle(color: AppTheme.white)),
           ),
         ],
       ),
@@ -130,19 +133,9 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF1746A2),
-        title: const Text('Profile', style: TextStyle(color: Colors.white)),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-      ),
+      appBar: AppWidgets.buildAppBar(title: 'Profile'),
       body: FadeTransition(
         opacity: _fadeAnimation,
         child: SlideTransition(
@@ -154,13 +147,27 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                 const SizedBox(height: 16),
                 GestureDetector(
                   onTap: _pickImage,
-                  child: CircleAvatar(
-                    radius: 50,
-                    backgroundColor: Colors.grey.shade300,
-                    backgroundImage: _imageFile != null ? FileImage(_imageFile!) : null,
-                    child: _imageFile == null
-                        ? const Icon(Icons.person, size: 50, color: Colors.blue)
-                        : null,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: AppTheme.primaryGradient,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppTheme.primaryBlue.withOpacity(0.3),
+                          blurRadius: 15,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(3),
+                    child: CircleAvatar(
+                      radius: 50,
+                      backgroundColor: AppTheme.white,
+                      backgroundImage: _imageFile != null ? FileImage(_imageFile!) : null,
+                      child: _imageFile == null
+                          ? const Icon(Icons.person, size: 50, color: AppTheme.primaryBlue)
+                          : null,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -169,22 +176,22 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1746A2),
+                    color: AppTheme.primaryBlue,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   _email,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 14,
-                    color: isDark ? Colors.white70 : Colors.grey,
+                    color: AppTheme.mediumGrey,
                   ),
                 ),
                 const SizedBox(height: 30),
                 _buildProfileOption(
                   icon: Icons.phone,
                   label: 'Contact Info',
-                  color: Colors.green,
+                  color: AppTheme.success,
                   onTap: () {
                     Navigator.push(
                       context,
@@ -206,7 +213,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                 _buildProfileOption(
                   icon: Icons.security,
                   label: 'Security Settings',
-                  color: Colors.amber,
+                  color: AppTheme.warning,
                   onTap: () {
                     Navigator.push(
                       context,
@@ -217,7 +224,7 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                 _buildProfileOption(
                   icon: Icons.logout,
                   label: 'Log out',
-                  color: Colors.red,
+                  color: AppTheme.error,
                   isLogout: true,
                   onTap: _confirmLogout,
                 ),
@@ -227,8 +234,8 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
         ),
       ),
       bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: const Color(0xFF3B3B98),
-        selectedItemColor: Colors.white,
+        backgroundColor: AppTheme.primaryBlue,
+        selectedItemColor: AppTheme.white,
         unselectedItemColor: Colors.white70,
         currentIndex: _selectedIndex,
         onTap: (index) {
@@ -251,13 +258,13 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                     child: Container(
                       padding: const EdgeInsets.all(4),
                       decoration: const BoxDecoration(
-                        color: Colors.red,
+                        color: AppTheme.error,
                         shape: BoxShape.circle,
                       ),
                       child: Text(
                         '$_unreadMessages',
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: AppTheme.white,
                           fontSize: 10,
                         ),
                       ),
@@ -280,19 +287,28 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     bool isLogout = false,
   }) {
     return Card(
-      elevation: 1,
+      elevation: 2,
       margin: const EdgeInsets.symmetric(vertical: 8),
+      color: Theme.of(context).cardColor,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
-        leading: Icon(icon, color: color),
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color),
+        ),
         title: Text(
           label,
           style: TextStyle(
             fontSize: 16,
             fontWeight: isLogout ? FontWeight.bold : FontWeight.normal,
-            color: isLogout ? Colors.red : null,
+            color: isLogout ? AppTheme.error : Theme.of(context).textTheme.bodyLarge?.color,
           ),
         ),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: AppTheme.mediumGrey),
         onTap: onTap,
       ),
     );

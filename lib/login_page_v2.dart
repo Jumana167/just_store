@@ -4,10 +4,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 import 'theme_provider.dart';
 import 'forgot_password_screen.dart';
 import 'home_page.dart';
+import 'app_theme.dart';
 
 class LoginPageV2 extends StatefulWidget {
   const LoginPageV2({super.key});
@@ -61,17 +63,18 @@ class _LoginPageV2State extends State<LoginPageV2> {
   Future<void> _login() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
+    final l10n = AppLocalizations.of(context)!;
 
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Email and password are required")),
+        SnackBar(content: Text(l10n.requiredField)),
       );
       return;
     }
 
     if (!isUniversityEmail(email)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Invalid university email")),
+        SnackBar(content: Text(l10n.invalidEmail)),
       );
       return;
     }
@@ -102,7 +105,7 @@ class _LoginPageV2State extends State<LoginPageV2> {
     } on FirebaseAuthException catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Incorrect email or password")),
+        SnackBar(content: Text(l10n.invalidPassword)),
       );
     }
   }
@@ -111,10 +114,11 @@ class _LoginPageV2State extends State<LoginPageV2> {
   Widget build(BuildContext context) {
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
     final size = MediaQuery.of(context).size;
-    final textColor = isDark ? Colors.white : Colors.black;
+    final textColor = isDark ? AppTheme.white : AppTheme.darkGrey;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      backgroundColor: isDark ? Colors.black : Colors.white,
+      backgroundColor: isDark ? AppTheme.black : AppTheme.white,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -129,13 +133,13 @@ class _LoginPageV2State extends State<LoginPageV2> {
         children: [
           const SizedBox(height: 60),
           Text(
-            'Welcome\nBack!',
+            l10n.welcome,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: 'Georgia',
               fontSize: 36,
               fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : const Color(0xFF024cae),
+              color: isDark ? AppTheme.white : AppTheme.primaryBlue,
               height: 1.2,
             ),
           ),
@@ -145,40 +149,35 @@ class _LoginPageV2State extends State<LoginPageV2> {
               width: size.width,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 25),
               decoration: BoxDecoration(
-                gradient: isDark
-                    ? null
-                    : const LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFF3891D6), Color(0xFF170557)],
-                ),
+                gradient: isDark ? null : AppTheme.primaryGradient,
+                color: isDark ? AppTheme.darkGrey : null,
               ),
               child: SingleChildScrollView(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Center(
+                    Center(
                       child: Text(
-                        'Login',
-                        style: TextStyle(
+                        l10n.login,
+                        style: const TextStyle(
                           fontFamily: 'Georgia',
                           fontSize: 36,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: AppTheme.white,
                         ),
                       ),
                     ),
                     const SizedBox(height: 6),
-                    const Center(
+                    Center(
                       child: Text(
-                        'Sign in to continue.',
-                        style: TextStyle(color: Colors.white70, fontSize: 18),
+                        l10n.signInToContinue,
+                        style: const TextStyle(color: Colors.white70, fontSize: 18),
                       ),
                     ),
                     const SizedBox(height: 25),
-                    const Text(
-                      'EMAIL',
-                      style: TextStyle(
+                    Text(
+                      l10n.email.toUpperCase(),
+                      style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -187,13 +186,13 @@ class _LoginPageV2State extends State<LoginPageV2> {
                     const SizedBox(height: 6),
                     TextField(
                       controller: _emailController,
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: AppTheme.white),
                       decoration: InputDecoration(
-                        hintText: 'Your university email',
+                        hintText: l10n.enterEmail,
                         hintStyle: const TextStyle(color: Colors.white70),
-                        prefixIcon: const Icon(Icons.email_outlined, color: Colors.white),
+                        prefixIcon: const Icon(Icons.email_outlined, color: AppTheme.white),
                         filled: true,
-                        fillColor: Colors.white.withAlpha((0.2 * 255).toInt()),
+                        fillColor: AppTheme.white.withAlpha((0.2 * 255).toInt()),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                           borderSide: BorderSide.none,
@@ -201,9 +200,9 @@ class _LoginPageV2State extends State<LoginPageV2> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    const Text(
-                      'PASSWORD',
-                      style: TextStyle(
+                    Text(
+                      l10n.password.toUpperCase(),
+                      style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -213,12 +212,13 @@ class _LoginPageV2State extends State<LoginPageV2> {
                     TextField(
                       controller: _passwordController,
                       obscureText: true,
-                      style: const TextStyle(color: Colors.white),
+                      style: const TextStyle(color: AppTheme.white),
                       decoration: InputDecoration(
                         hintText: '**',
                         hintStyle: const TextStyle(color: Colors.white70),
-                        prefixIcon: const Icon(Icons.lock_outline, color: Colors.white),
+                        prefixIcon: const Icon(Icons.lock_outline, color: AppTheme.white),
                         filled: true,
+                        fillColor: AppTheme.white.withAlpha((0.2 * 255).toInt()),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                           borderSide: BorderSide.none,
@@ -236,36 +236,65 @@ class _LoginPageV2State extends State<LoginPageV2> {
                               MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
                             );
                           },
-                          child: const Text('Forgot Password?', style: TextStyle(color: Colors.white)),
+                          child: Text(l10n.forgotPassword, style: const TextStyle(color: AppTheme.white)),
                         ),
                         Row(
                           children: [
                             Checkbox(
                               value: rememberMe,
                               onChanged: (val) => setState(() => rememberMe = val ?? false),
-                              side: const BorderSide(color: Colors.white),
-                              checkColor: Colors.blue,
-                              activeColor: Colors.white,
+                              side: const BorderSide(color: AppTheme.white),
+                              checkColor: AppTheme.primaryBlue,
+                              activeColor: AppTheme.white,
                             ),
-                            const Text('Remember me', style: TextStyle(color: Colors.white)),
+                            Text(l10n.rememberMe, style: const TextStyle(color: AppTheme.white)),
                           ],
                         ),
                       ],
                     ),
-                    const SizedBox(height: 25),
-                    Center(
+                    const SizedBox(height: 30),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 55,
                       child: ElevatedButton(
                         onPressed: _login,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.blue.shade800,
-                          padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 14),
+                          backgroundColor: AppTheme.white,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        child: const Text('Login', style: TextStyle(fontWeight: FontWeight.bold)),
+                        child: Text(
+                          l10n.login,
+                          style: const TextStyle(
+                            color: AppTheme.primaryBlue,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          l10n.dontHaveAccount,
+                          style: const TextStyle(color: Colors.white70),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pushNamed(context, '/signup');
+                          },
+                          child: Text(
+                            l10n.signup,
+                            style: const TextStyle(
+                              color: AppTheme.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

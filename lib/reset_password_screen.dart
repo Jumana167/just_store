@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'theme_provider.dart';
+import 'app_theme.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   const ResetPasswordScreen({super.key});
@@ -49,69 +50,71 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     final isDark = themeProvider.isDarkMode;
 
     return Scaffold(
-      backgroundColor: isDark ? Colors.black : Colors.white,
+      backgroundColor: isDark ? AppTheme.black : AppTheme.white,
       body: SafeArea(
         child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 50),
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: isDark
-                    ? null
-                    : const LinearGradient(
-                        colors: [Color(0xFF2E6FF2), Color(0xFF23095A)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                color: isDark ? Colors.grey[900] : null,
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Form(
-                key: _formKey,
-                autovalidateMode: _submitted ? AutovalidateMode.always : AutovalidateMode.disabled,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Reset Password',
-                      style: TextStyle(
-                        fontSize: 22,
-                        color: isDark ? Colors.white : Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 30),
-                    TextFormField(
-                      controller: _newPasswordController,
-                      obscureText: true,
-                      style: TextStyle(color: isDark ? Colors.white : Colors.white),
-                      validator: _validatePassword,
-                      decoration: _inputDecoration("New Password", isDark),
-                    ),
-                    const SizedBox(height: 20),
-                    TextFormField(
-                      controller: _confirmPasswordController,
-                      obscureText: true,
-                      style: TextStyle(color: isDark ? Colors.white : Colors.white),
-                      validator: _validateConfirmPassword,
-                      decoration: _inputDecoration("Confirm Password", isDark),
-                    ),
-                    const SizedBox(height: 30),
-                    ElevatedButton(
-                      onPressed: _submit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.blue.shade800,
-                        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                      ),
-                      child: const Text(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 50),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: isDark
+                      ? null
+                      : const LinearGradient(
+                          colors: [AppTheme.primaryBlue, AppTheme.accentBlue],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                  color: isDark ? AppTheme.darkGrey : null,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Form(
+                  key: _formKey,
+                  autovalidateMode: _submitted ? AutovalidateMode.always : AutovalidateMode.disabled,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
                         'Reset Password',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 22,
+                          color: isDark ? AppTheme.white : AppTheme.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 30),
+                      TextFormField(
+                        controller: _newPasswordController,
+                        obscureText: true,
+                        style: TextStyle(color: isDark ? AppTheme.white : AppTheme.white),
+                        validator: _validatePassword,
+                        decoration: _inputDecoration("New Password", isDark),
+                      ),
+                      const SizedBox(height: 20),
+                      TextFormField(
+                        controller: _confirmPasswordController,
+                        obscureText: true,
+                        style: TextStyle(color: isDark ? AppTheme.white : AppTheme.white),
+                        validator: _validateConfirmPassword,
+                        decoration: _inputDecoration("Confirm Password", isDark),
+                      ),
+                      const SizedBox(height: 30),
+                      ElevatedButton(
+                        onPressed: _submit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.white,
+                          foregroundColor: AppTheme.primaryBlue,
+                          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                        ),
+                        child: const Text(
+                          'Reset Password',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -124,9 +127,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   InputDecoration _inputDecoration(String hint, bool isDark) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(color: Colors.white.withAlpha(179)), // بدل 0.7
+      hintStyle: TextStyle(color: AppTheme.white.withAlpha(179)),
       filled: true,
-      fillColor: Colors.white.withAlpha(51), // بدل 0.2
+      fillColor: AppTheme.white.withAlpha(51),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(30),
         borderSide: BorderSide.none,

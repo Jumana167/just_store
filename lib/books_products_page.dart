@@ -1,38 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import '../providers/product_provider.dart';
 import 'book_details_page.dart';
+import 'app_theme.dart';
 
 class BooksProductsPage extends StatelessWidget {
   const BooksProductsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final products = Provider.of<ProductProvider>(context).getProductsByCategory('Books');
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF3B3B98),
-        title: const Text('Books', style: TextStyle(color: Colors.white)),
-        iconTheme: const IconThemeData(color: Colors.white),
+        backgroundColor: theme.primaryColor,
+        title: Text(l10n.books, style: TextStyle(color: theme.textTheme.bodyLarge?.color)),
+        iconTheme: IconThemeData(color: theme.textTheme.bodyLarge?.color),
         centerTitle: true,
       ),
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: products.isEmpty
-          ? const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.book, size: 64, color: Colors.grey),
-            SizedBox(height: 16),
-            Text(
-              "No books available",
-              style: TextStyle(fontSize: 18, color: Colors.grey),
-            ),
-          ],
-        ),
-      )
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.book, size: 64, color: AppTheme.mediumGrey),
+                  const SizedBox(height: 16),
+                  Text(
+                    l10n.noBooksAvailable,
+                    style: TextStyle(fontSize: 18, color: AppTheme.mediumGrey),
+                  ),
+                ],
+              ),
+            )
           : ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: products.length,
@@ -116,7 +120,7 @@ class BooksProductsPage extends StatelessWidget {
                           Row(
                             children: [
                               Text(
-                                "${product.price} JD",
+                                "${product.price} ${l10n.jd}",
                                 style: const TextStyle(
                                   color: Colors.green,
                                   fontWeight: FontWeight.bold,
@@ -125,7 +129,7 @@ class BooksProductsPage extends StatelessWidget {
                               ),
                               const Spacer(),
                               Text(
-                                'by ${product.ownerName}',
+                                '${l10n.by} ${product.ownerName}',
                                 style: TextStyle(
                                   color: Colors.grey[500],
                                   fontSize: 12,

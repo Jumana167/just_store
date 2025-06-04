@@ -1,22 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'login_page_v2.dart';
 import 'sign_up_screen.dart';
+import 'app_theme.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       body: Container(
         width: double.infinity,
         height: double.infinity,
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF3891D6), Color(0xFF170557)],
-          ),
+          gradient: AppTheme.primaryGradient,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -32,52 +31,39 @@ class WelcomeScreen extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 40,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: AppTheme.white,
                       letterSpacing: 2,
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    "Buy. Sell. Connect.",
-                    style: TextStyle(
+                  Text(
+                    l10n.welcomeTagline,
+                    style: const TextStyle(
                       fontSize: 18,
                       color: Colors.white70,
                     ),
                   ),
                   const SizedBox(height: 60),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.blue.shade800,
-                      padding: const EdgeInsets.symmetric(horizontal: 80, vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                    ),
+                  AppWidgets.buildPrimaryButton(
+                    text: l10n.login,
                     onPressed: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => const LoginPageV2()),
                       );
                     },
-                    child: const Text("Login", style: TextStyle(fontWeight: FontWeight.bold)),
+                    width: 200,
                   ),
                   const SizedBox(height: 20),
-                  OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Colors.white),
-                      padding: const EdgeInsets.symmetric(horizontal: 70, vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                    ),
+                  AppWidgets.buildSecondaryButton(
+                    text: l10n.signUp,
                     onPressed: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => const SignUpScreen()),
                       );
                     },
-                    child: const Text("Sign Up", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    width: 200,
                   ),
                 ],
               ),

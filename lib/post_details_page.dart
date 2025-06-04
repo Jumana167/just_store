@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'app_theme.dart';
+import 'services/chat_service.dart';
+import 'chat_page.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 class PostDetailsPage extends StatefulWidget {
   final String postId;
@@ -133,17 +137,62 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
   }
 
   Future<void> _messageOwner() async {
-    // Navigate to chat with owner
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Opening chat with owner...'),
-        backgroundColor: Color(0xFF1976D2),
-      ),
-    );
+    final l10n = AppLocalizations.of(context)!;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.pleaseLoginToChat)),
+      );
+      return;
+    }
+    final ownerId = widget.postData['ownerId'] ?? '';
+    final ownerName = widget.postData['ownerName'] ?? 'User';
+    final ownerAvatar = widget.postData['ownerAvatar'] ?? '';
+    if (ownerId.isEmpty || ownerId == user.uid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.errorStartingChat)),
+      );
+      return;
+    }
+    try {
+      final chatService = ChatService();
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator()),
+      );
+      final String chatRoomId = await chatService.createOrGetChatRoom(
+        ownerId,
+        ownerName,
+        ownerAvatar,
+      );
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatPage(
+            chatRoomId: chatRoomId,
+            recipientId: ownerId,
+            recipientName: ownerName,
+            recipientAvatar: ownerAvatar,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.errorStartingChat)),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final name = widget.postData['name'] ?? 'Untitled';
     final price = widget.postData['price']?.toString() ?? '0';
     final description = widget.postData['description'] ?? '';
@@ -154,7 +203,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
     final ownerName = widget.postData['ownerName'] ?? 'Anonymous';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFB),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: FadeTransition(
         opacity: _fadeAnimation,
         child: CustomScrollView(
@@ -182,18 +231,19 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
   }
 
   Widget _buildSliverAppBar(String imageUrl, String name) {
+    final theme = Theme.of(context);
     return SliverAppBar(
       expandedHeight: 300,
       pinned: true,
-      backgroundColor: const Color(0xFF1976D2),
+      backgroundColor: theme.primaryColor,
       leading: Container(
         margin: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.9),
+          color: theme.cardColor.withOpacity(0.9),
           borderRadius: BorderRadius.circular(12),
         ),
         child: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1976D2)),
+          icon: Icon(Icons.arrow_back, color: theme.primaryColor),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -201,13 +251,13 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
         Container(
           margin: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.9),
+            color: theme.cardColor.withOpacity(0.9),
             borderRadius: BorderRadius.circular(12),
           ),
           child: IconButton(
             icon: Icon(
               _isLiked ? Icons.favorite : Icons.favorite_border,
-              color: _isLiked ? Colors.red : const Color(0xFF1976D2),
+              color: _isLiked ? theme.colorScheme.error : theme.primaryColor,
             ),
             onPressed: _toggleLike,
           ),
@@ -223,24 +273,16 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) => Container(
                 decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  gradient: AppTheme.primaryGradient,
                 ),
-                child: const Icon(Icons.image_not_supported, size: 60, color: Colors.white),
+                child: const Icon(Icons.image_not_supported, size: 60, color: AppTheme.white),
               ),
             )
                 : Container(
               decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+                gradient: AppTheme.primaryGradient,
               ),
-              child: const Icon(Icons.image, size: 60, color: Colors.white),
+              child: const Icon(Icons.image, size: 60, color: AppTheme.white),
             ),
             Container(
               decoration: BoxDecoration(
@@ -262,15 +304,19 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
 
   Widget _buildPostInfo(String name, String price, String description,
       String condition, String location, String category, String ownerName) {
+    final college = widget.postData['college'] ?? '';
+    final studyYear = widget.postData['studyYear'] ?? '';
+    final subCategory = widget.postData['subCategory'] ?? '';
+
     return Container(
       margin: const EdgeInsets.all(20),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.08) ?? Colors.grey,
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -291,22 +337,20 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF2C3E50),
+                        color: AppTheme.darkGrey,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
-                        ),
+                        gradient: AppTheme.primaryGradient,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        "\$price",
+                        "\$$price",
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: AppTheme.white,
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),
@@ -324,7 +368,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
                 child: Text(
                   condition,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: AppTheme.white,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -340,12 +384,10 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
-                  ),
+                  gradient: AppTheme.primaryGradient,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.person, color: Colors.white, size: 20),
+                child: const Icon(Icons.person, color: AppTheme.white, size: 20),
               ),
               const SizedBox(width: 12),
               Column(
@@ -353,14 +395,14 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
                 children: [
                   const Text(
                     'Seller',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(fontSize: 12, color: AppTheme.mediumGrey),
                   ),
                   Text(
                     ownerName,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF2C3E50),
+                      color: AppTheme.darkGrey,
                     ),
                   ),
                 ],
@@ -369,18 +411,36 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
           ),
           const SizedBox(height: 16),
 
-          // Location and Category
+          // College and Study Year
           Row(
             children: [
               Expanded(
-                child: _buildInfoItem(Icons.location_on, 'Location', location),
+                child: _buildInfoItem(Icons.school, 'College', college),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: _buildInfoItem(Icons.category, 'Category', category),
+                child: _buildInfoItem(Icons.calendar_today, 'Study Year', studyYear),
               ),
             ],
           ),
+          const SizedBox(height: 12),
+
+          // Category and Sub-category
+          Row(
+            children: [
+              Expanded(
+                child: _buildInfoItem(Icons.category, 'Category', category),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildInfoItem(Icons.subdirectory_arrow_right, 'Sub-category', subCategory),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Location
+          _buildInfoItem(Icons.location_on, 'Location', location),
 
           if (description.isNotEmpty) ...[
             const SizedBox(height: 20),
@@ -389,23 +449,23 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1976D2),
+                color: AppTheme.primaryBlue,
               ),
             ),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFB),
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFF1976D2).withOpacity(0.1)),
+                border: Border.all(color: Theme.of(context).primaryColor.withOpacity(0.1)),
               ),
               child: Text(
                 description,
                 style: const TextStyle(
                   fontSize: 15,
                   height: 1.5,
-                  color: Color(0xFF2C3E50),
+                  color: AppTheme.darkGrey,
                 ),
               ),
             ),
@@ -419,13 +479,13 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFB),
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF1976D2).withOpacity(0.1)),
+        border: Border.all(color: Theme.of(context).primaryColor.withOpacity(0.1)),
       ),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFF1976D2), size: 18),
+          Icon(icon, color: Theme.of(context).primaryColor, size: 18),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -433,14 +493,14 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
               children: [
                 Text(
                   label,
-                  style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                  style: TextStyle(fontSize: 10, color: AppTheme.mediumGrey),
                 ),
                 Text(
                   value,
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF2C3E50),
+                    color: AppTheme.darkGrey,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -459,40 +519,10 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
       child: Row(
         children: [
           Expanded(
-            child: Container(
-              height: 50,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
-                ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF1976D2).withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ElevatedButton.icon(
-                onPressed: _messageOwner,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.transparent,
-                  shadowColor: Colors.transparent,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                icon: const Icon(Icons.message, color: Colors.white),
-                label: const Text(
-                  'Message Owner',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
+            child: AppWidgets.buildPrimaryButton(
+              text: 'Message Owner',
+              onPressed: _messageOwner,
+              icon: Icons.message,
             ),
           ),
           const SizedBox(width: 12),
@@ -500,9 +530,9 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
             height: 50,
             width: 50,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).cardColor,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF1976D2), width: 2),
+              border: Border.all(color: Theme.of(context).primaryColor, width: 2),
             ),
             child: IconButton(
               onPressed: () {
@@ -510,11 +540,11 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Sharing post...'),
-                    backgroundColor: Color(0xFF1976D2),
+                    backgroundColor: AppTheme.primaryBlue,
                   ),
                 );
               },
-              icon: const Icon(Icons.share, color: Color(0xFF1976D2)),
+              icon: const Icon(Icons.share, color: AppTheme.primaryBlue),
             ),
           ),
         ],
@@ -527,11 +557,11 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
       margin: const EdgeInsets.all(20),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.05) ?? Colors.grey,
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -541,7 +571,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
         children: [
           Icon(
             _isLiked ? Icons.favorite : Icons.favorite_border,
-            color: _isLiked ? Colors.red : const Color(0xFF1976D2),
+            color: _isLiked ? Theme.of(context).colorScheme.error : Theme.of(context).primaryColor,
             size: 24,
           ),
           const SizedBox(width: 8),
@@ -550,7 +580,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF2C3E50),
+              color: AppTheme.darkGrey,
             ),
           ),
         ],
@@ -562,11 +592,11 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.05) ?? Colors.grey,
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -579,14 +609,14 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                const Icon(Icons.comment, color: Color(0xFF1976D2), size: 24),
+                const Icon(Icons.comment, color: AppTheme.primaryBlue, size: 24),
                 const SizedBox(width: 8),
                 Text(
                   'Comments (${_comments.length})',
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF1976D2),
+                    color: AppTheme.primaryBlue,
                   ),
                 ),
               ],
@@ -598,15 +628,15 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
               child: Center(
                 child: Column(
                   children: [
-                    Icon(Icons.comment_outlined, size: 48, color: Colors.grey[400]),
+                    Icon(Icons.comment_outlined, size: 48, color: AppTheme.mediumGrey.withOpacity(0.7)),
                     const SizedBox(height: 8),
                     Text(
                       'No comments yet',
-                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                      style: TextStyle(fontSize: 16, color: AppTheme.mediumGrey),
                     ),
                     Text(
                       'Be the first to comment!',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                      style: TextStyle(fontSize: 14, color: AppTheme.mediumGrey.withOpacity(0.8)),
                     ),
                   ],
                 ),
@@ -619,7 +649,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
               padding: const EdgeInsets.only(bottom: 16),
               itemCount: _comments.length,
               separatorBuilder: (context, index) => Divider(
-                color: Colors.grey[200],
+                color: Theme.of(context).dividerColor,
                 height: 1,
               ),
               itemBuilder: (context, index) {
@@ -633,12 +663,10 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
                         width: 32,
                         height: 32,
                         decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
-                          ),
+                          gradient: AppTheme.primaryGradient,
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        child: const Icon(Icons.person, color: Colors.white, size: 16),
+                        child: const Icon(Icons.person, color: AppTheme.white, size: 16),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -649,7 +677,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
                               comment['userName'] ?? 'Anonymous',
                               style: const TextStyle(
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF1976D2),
+                                color: AppTheme.primaryBlue,
                                 fontSize: 14,
                               ),
                             ),
@@ -658,7 +686,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
                               comment['text'] ?? '',
                               style: const TextStyle(
                                 fontSize: 14,
-                                color: Color(0xFF2C3E50),
+                                color: AppTheme.darkGrey,
                                 height: 1.3,
                               ),
                             ),
@@ -679,10 +707,10 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.1) ?? Colors.grey,
             blurRadius: 10,
             offset: const Offset(0, -4),
           ),
@@ -694,15 +722,15 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFB),
+                  color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: const Color(0xFF1976D2).withOpacity(0.2)),
+                  border: Border.all(color: Theme.of(context).primaryColor.withOpacity(0.2)),
                 ),
                 child: TextField(
                   controller: _commentController,
                   decoration: const InputDecoration(
                     hintText: 'Write a comment...',
-                    hintStyle: TextStyle(color: Colors.grey),
+                    hintStyle: TextStyle(color: AppTheme.mediumGrey),
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   ),
@@ -713,14 +741,12 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
             const SizedBox(width: 8),
             Container(
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
-                ),
+                gradient: AppTheme.primaryGradient,
                 borderRadius: BorderRadius.circular(24),
               ),
               child: IconButton(
                 onPressed: _addComment,
-                icon: const Icon(Icons.send, color: Colors.white),
+                icon: const Icon(Icons.send, color: AppTheme.white),
               ),
             ),
           ],
@@ -732,14 +758,15 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
   Color _getConditionColor(String condition) {
     switch (condition.toLowerCase()) {
       case 'new':
-        return const Color(0xFF4CAF50);
+        return AppTheme.success;
       case 'excellent':
-        return const Color(0xFF2196F3);
+        return AppTheme.info;
       case 'good':
-        return const Color(0xFFFF9800);
+        return AppTheme.warning;
       case 'fair':
-        return const Color(0xFFFF5722);
+        return AppTheme.error;
       default:
-        return const Color(0xFF9E9E9E);
+        return AppTheme.mediumGrey;
     }
-  }}
+  }
+}

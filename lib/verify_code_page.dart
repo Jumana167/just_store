@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
 import 'auth_service.dart';
 import 'dart:async';
+import 'app_theme.dart';
 
 class VerifyCodePage extends StatefulWidget {
   final String email;
@@ -137,8 +138,9 @@ class _VerifyCodePageState extends State<VerifyCodePage> {
       appBar: AppBar(
         title: const Text('Verify Email'),
         elevation: 0,
+        backgroundColor: AppTheme.primaryBlue,
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -177,9 +179,9 @@ class _VerifyCodePageState extends State<VerifyCodePage> {
                   activeFillColor: Colors.white,
                   inactiveFillColor: Colors.white,
                   selectedFillColor: Colors.white,
-                  activeColor: Theme.of(context).primaryColor,
+                  activeColor: AppTheme.primaryBlue,
                   inactiveColor: Colors.grey.shade300,
-                  selectedColor: Theme.of(context).primaryColor,
+                  selectedColor: AppTheme.primaryBlue,
                 ),
                 keyboardType: TextInputType.number,
                 enableActiveFill: true,
@@ -203,7 +205,7 @@ class _VerifyCodePageState extends State<VerifyCodePage> {
                 Text(
                   _formatTime(_remainingTime),
                   style: TextStyle(
-                    color: _remainingTime < 60 ? Colors.red : Colors.green,
+                    color: _remainingTime < 60 ? Colors.red : AppTheme.primaryBlue,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -214,6 +216,7 @@ class _VerifyCodePageState extends State<VerifyCodePage> {
               onPressed: _isLoading ? null : _verifyCode,
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 50),
+                backgroundColor: AppTheme.primaryBlue,
               ),
               child: _isLoading
                   ? const CircularProgressIndicator()

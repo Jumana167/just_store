@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'reset_email_sent_screen.dart';
 import 'theme_provider.dart';
+import 'app_theme.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -61,13 +62,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final isDark = themeProvider.isDarkMode;
 
     return Scaffold(
-      backgroundColor: isDark ? Colors.black : Colors.white,
+      backgroundColor: isDark ? AppTheme.black : AppTheme.white,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 20),
           child: Column(
             children: [
-              Icon(Icons.lock_reset, size: 60, color: isDark ? Colors.white : Colors.blue),
+              Icon(Icons.lock_reset, size: 60, color: isDark ? AppTheme.white : AppTheme.primaryBlue),
               const SizedBox(height: 20),
               Text(
                 'Forgot\nPassword?',
@@ -75,14 +76,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.blue,
+                  color: isDark ? AppTheme.white : AppTheme.primaryBlue,
                 ),
               ),
               const SizedBox(height: 10),
               Text(
                 "We'll send reset instructions to your university email.",
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: isDark ? Colors.grey[300] : Colors.grey),
+                style: TextStyle(fontSize: 16, color: isDark ? AppTheme.withOpacity(AppTheme.white, 0.7) : AppTheme.mediumGrey),
               ),
               const SizedBox(height: 40),
               Container(

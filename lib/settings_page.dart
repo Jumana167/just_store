@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 import 'theme_provider.dart';
+import 'providers/language_provider.dart';
 import 'profile_page.dart';
 import 'terms_conditions_page.dart';
 import 'privacy_policy_page.dart';
@@ -12,6 +14,7 @@ import 'about_app_page.dart';
 import 'rate_app_page.dart';
 import 'home_page.dart';
 import 'chat_list_page.dart';
+import 'app_theme.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -81,23 +84,17 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final languageProvider = Provider.of<LanguageProvider>(context);
     final backgroundColor = Theme.of(context).scaffoldBackgroundColor;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF3B3B98),
-        centerTitle: true,
-        title: const Text('Settings', style: TextStyle(color: Colors.white)),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
+      appBar: AppWidgets.buildAppBar(title: l10n.settings),
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         children: [
-          _buildSettingsTile(Icons.person, 'Edit Profile', Colors.green, () {
+          _buildSettingsTile(Icons.person, l10n.profile, AppTheme.success, () {
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -106,23 +103,24 @@ class _SettingsPageState extends State<SettingsPage> {
             );
           }),
           const SizedBox(height: 12),
-          const Divider(),
+          const Divider(color: AppTheme.borderGrey),
           const SizedBox(height: 8),
-          const Text(
-            "General Settings",
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey),
+          Text(
+            l10n.generalSettings,
+            style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.mediumGrey),
           ),
           const SizedBox(height: 8),
           SwitchListTile(
-            secondary: const Icon(Icons.brightness_6, color: Colors.orange),
-            title: const Text('Dark Mode'),
-            subtitle: const Text('Toggle light/dark theme'),
+            secondary: const Icon(Icons.brightness_6, color: AppTheme.warning),
+            title: Text(l10n.darkMode),
+            subtitle: Text(l10n.darkModeSubtitle),
             value: themeProvider.isDarkMode,
             onChanged: (val) => themeProvider.toggleTheme(val),
+            activeColor: AppTheme.primaryBlue,
           ),
           SwitchListTile(
-            secondary: const Icon(Icons.notifications, color: Colors.amber),
-            title: const Text('Notifications'),
+            secondary: const Icon(Icons.notifications, color: AppTheme.warning),
+            title: Text(l10n.notifications),
             value: notificationsOn,
             onChanged: (val) {
               setState(() {
@@ -131,13 +129,46 @@ class _SettingsPageState extends State<SettingsPage> {
               _saveNotifications(val);
               val ? _showTestNotification() : _cancelAllNotifications();
             },
+            activeColor: AppTheme.primaryBlue,
           ),
-          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.language, color: AppTheme.warning),
+            title: Text(l10n.language),
+            subtitle: Text(languageProvider.isEnglish ? 'English' : 'العربية'),
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: Text(l10n.selectLanguage),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ListTile(
+                        title: const Text('English'),
+                        onTap: () {
+                          languageProvider.changeLanguage(const Locale('en'));
+                          Navigator.pop(context);
+                        },
+                      ),
+                      ListTile(
+                        title: const Text('العربية'),
+                        onTap: () {
+                          languageProvider.changeLanguage(const Locale('ar'));
+                          Navigator.pop(context);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+          const Divider(color: AppTheme.borderGrey),
           _buildSettingsTile(
             Icons.description,
-            'Terms & Conditions',
-            Colors.indigo,
-                () {
+            l10n.termsConditions,
+            AppTheme.info,
+            () {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const TermsAndConditionsPage()),
@@ -147,7 +178,7 @@ class _SettingsPageState extends State<SettingsPage> {
           _buildSettingsTile(
             Icons.lock,
             'Privacy Policy',
-            Colors.red,
+            AppTheme.error,
                 () {
               Navigator.push(
                 context,
@@ -158,7 +189,7 @@ class _SettingsPageState extends State<SettingsPage> {
           _buildSettingsTile(
             Icons.star,
             'Rate This App',
-            Colors.purple,
+            AppTheme.primaryBlue,
                 () {
               Navigator.push(
                 context,
@@ -172,7 +203,7 @@ class _SettingsPageState extends State<SettingsPage> {
               subject: 'Just Store App 🌟',
             );
           }),
-          _buildSettingsTile(Icons.info_outline, 'About', Colors.teal, () {
+          _buildSettingsTile(Icons.info_outline, 'About', AppTheme.accentBlue, () {
             Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const AboutAppPage()),
@@ -181,8 +212,8 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: const Color(0xFF3B3B98),
-        selectedItemColor: Colors.white,
+        backgroundColor: AppTheme.primaryBlue,
+        selectedItemColor: AppTheme.white,
         unselectedItemColor: Colors.white70,
         currentIndex: 2,
         onTap: (index) {
@@ -217,13 +248,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: Container(
                       padding: const EdgeInsets.all(4),
                       decoration: const BoxDecoration(
-                        color: Colors.red,
+                        color: AppTheme.error,
                         shape: BoxShape.circle,
                       ),
                       child: Text(
                         '$_unreadMessages',
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: AppTheme.white,
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                         ),
@@ -245,11 +276,17 @@ class _SettingsPageState extends State<SettingsPage> {
       Color iconColor,
       VoidCallback onTap,
       ) {
-    return ListTile(
-      leading: Icon(icon, color: iconColor),
-      title: Text(title),
-      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-      onTap: onTap,
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      color: Theme.of(context).cardColor,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ListTile(
+        leading: Icon(icon, color: iconColor),
+        title: Text(title),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: AppTheme.mediumGrey),
+        onTap: onTap,
+      ),
     );
   }
 }

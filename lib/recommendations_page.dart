@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 Future<List<DocumentSnapshot>> getContentBasedRecommendations(String uid) async {
   final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
@@ -71,4 +73,65 @@ Future<List<DocumentSnapshot>> getCombinedRecommendations(String uid) async {
   final all = {...contentBased, ...collaborative, ...categoryBased}.toList();
   all.shuffle();
   return all.take(10).toList();
+}
+
+class RecommendationsPage extends StatelessWidget {
+  const RecommendationsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return const SizedBox();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Recommended for You'),
+      ),
+      body: FutureBuilder<List<DocumentSnapshot>>(
+        future: getCombinedRecommendations(user.uid),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text('No recommendations available'));
+          }
+          final products = snapshot.data!;
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: products.length,
+            itemBuilder: (context, index) {
+              final data = products[index].data() as Map<String, dynamic>;
+              return Card(
+                margin: const EdgeInsets.only(bottom: 16),
+                child: ListTile(
+                  leading: data['imageUrls'] != null && data['imageUrls'].isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            data['imageUrls'][0],
+                            width: 60,
+                            height: 60,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      : Container(
+                          width: 60,
+                          height: 60,
+                          color: Colors.grey[200],
+                          child: const Icon(Icons.image, color: Colors.grey),
+                        ),
+                  title: Text(data['name'] ?? ''),
+                  subtitle: Text('${data['price']} JD'),
+                  onTap: () {
+                    // Navigate to product details
+                  },
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
 }

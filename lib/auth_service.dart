@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -15,6 +16,12 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // Get current user
+  User? get currentUser => _auth.currentUser;
+
+  // Auth state changes stream
+  Stream<User?> get authStateChanges => _auth.authStateChanges();
+
   // ✅ Method to send verification code via Firebase HTTP Function
   Future<Map<String, dynamic>> sendVerificationCode(String email) async {
     try {
@@ -27,14 +34,14 @@ class AuthService {
       );
 
       if (response.statusCode == 200) {
-        print('✅ OTP sent successfully via HTTP function');
+        debugPrint('✅ OTP sent successfully via HTTP function');
         return json.decode(response.body);
       } else {
-        print('❌ Failed to send OTP: ${response.body}');
+        debugPrint('❌ Failed to send OTP: ${response.body}');
         throw Exception('Failed to send verification code');
       }
     } catch (e) {
-      print('❌ Error sending OTP: $e');
+      debugPrint('❌ Error sending OTP: $e');
       throw Exception('Failed to send verification code. Please try again later.');
     }
   }
@@ -49,7 +56,7 @@ class AuthService {
       final docSnapshot = await _firestore.collection('otp_codes').doc(email).get();
 
       if (!docSnapshot.exists) {
-        print('⚠️ No verification code found for this email');
+        debugPrint('⚠️ No verification code found for this email');
         return false;
       }
 
@@ -58,40 +65,88 @@ class AuthService {
       final expiresAt = data?['expiresAt'] as Timestamp?;
 
       if (expiresAt != null && expiresAt.toDate().isBefore(DateTime.now())) {
-        print('⚠️ Verification code has expired');
+        debugPrint('⚠️ Verification code has expired');
         return false;
       }
 
       return code == storedCode;
     } catch (e) {
-      print('❌ Error verifying code: $e');
+      debugPrint('❌ Error verifying code: $e');
       return false;
     }
   }
 
-  Future<UserCredential?> signInWithEmailAndPassword(String email, String password) async {
+  // Sign in with email and password
+  Future<UserCredential> signInWithEmailAndPassword(String email, String password) async {
     try {
-      return await _auth.signInWithEmailAndPassword(email: email, password: password);
+      final userCredential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      debugPrint('User signed in successfully');
+      return userCredential;
     } catch (e) {
-      print('❌ Error signing in: $e');
+      debugPrint('Error signing in: $e');
       rethrow;
     }
   }
 
-  Future<UserCredential?> signUpWithEmailAndPassword(String email, String password) async {
+  // Register with email and password
+  Future<UserCredential> registerWithEmailAndPassword(String email, String password, String username) async {
     try {
-      return await _auth.createUserWithEmailAndPassword(email: email, password: password);
+      final userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      // Create user document in Firestore
+      await _firestore.collection('users').doc(userCredential.user!.uid).set({
+        'username': username,
+        'email': email,
+        'createdAt': FieldValue.serverTimestamp(),
+        'photoURL': '',
+        'favoriteCategories': [],
+      });
+
+      debugPrint('User registered successfully');
+      return userCredential;
     } catch (e) {
-      print('❌ Error signing up: $e');
+      debugPrint('Error registering user: $e');
       rethrow;
     }
   }
 
+  // Sign out
   Future<void> signOut() async {
-    return await _auth.signOut();
+    try {
+      await _auth.signOut();
+      debugPrint('User signed out successfully');
+    } catch (e) {
+      debugPrint('Error signing out: $e');
+      rethrow;
+    }
   }
 
+  // Reset password
   Future<void> resetPassword(String email) async {
-    return await _auth.sendPasswordResetEmail(email: email);
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+      debugPrint('Password reset email sent');
+    } catch (e) {
+      debugPrint('Error sending password reset email: $e');
+      rethrow;
+    }
+  }
+
+  // Update user profile
+  Future<void> updateUserProfile(String displayName, String photoURL) async {
+    try {
+      await _auth.currentUser?.updateDisplayName(displayName);
+      await _auth.currentUser?.updatePhotoURL(photoURL);
+      debugPrint('User profile updated successfully');
+    } catch (e) {
+      debugPrint('Error updating user profile: $e');
+      rethrow;
+    }
   }
 }

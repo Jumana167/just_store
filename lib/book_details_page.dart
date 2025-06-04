@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'chat_page.dart';
 import '../services/chat_service.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 class BookDetailsPage extends StatefulWidget {
   final String productId;
@@ -62,7 +63,9 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context)!;
     final user = FirebaseAuth.instance.currentUser;
 
     if (isLoading) {
@@ -77,17 +80,17 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
         appBar: AppBar(
           backgroundColor: const Color(0xFF3B3B98),
           foregroundColor: Colors.white,
-          title: const Text('Book Details'),
+          title: Text(l10n.bookDetails),
         ),
-        body: const Center(
+        body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline, size: 64, color: Colors.grey),
-              SizedBox(height: 16),
+              const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+              const SizedBox(height: 16),
               Text(
-                'Product not found.',
-                style: TextStyle(fontSize: 18, color: Colors.grey),
+                l10n.productNotFound,
+                style: const TextStyle(fontSize: 18, color: Colors.grey),
               ),
             ],
           ),
@@ -96,8 +99,8 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
     }
 
     final image = data!['imageUrl'] ?? '';
-    final title = data!['name'] ?? 'Untitled Book';
-    final description = data!['description'] ?? 'No description available';
+    final title = data!['name'] ?? l10n.bookDetails;
+    final description = data!['description'] ?? l10n.noDescription;
     final price = data!['price'] ?? '0';
     final phoneNumber = data!['phone'] ?? '';
     final recipientId = data!['ownerId'] ?? '';
@@ -113,7 +116,7 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
         foregroundColor: Colors.white,
         centerTitle: true,
       ),
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -173,7 +176,7 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                 border: Border.all(color: Colors.green),
               ),
               child: Text(
-                '$price JD',
+                '$price ${l10n.jd}',
                 style: const TextStyle(
                   fontSize: 22,
                   color: Colors.green,
@@ -207,9 +210,9 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Seller',
-                            style: TextStyle(
+                          Text(
+                            l10n.seller,
+                            style: const TextStyle(
                               fontSize: 12,
                               color: Colors.grey,
                             ),
@@ -230,9 +233,9 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
               const SizedBox(height: 30),
 
               // أزرار التواصل
-              const Text(
-                'Contact Seller',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              Text(
+                l10n.contactSeller,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 15),
 
@@ -244,7 +247,7 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                           ? () => _makePhoneCall(phoneNumber)
                           : null,
                       icon: const Icon(Icons.call, color: Colors.white),
-                      label: const Text('Call', style: TextStyle(color: Colors.white)),
+                      label: Text(l10n.call, style: const TextStyle(color: Colors.white)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         padding: const EdgeInsets.symmetric(vertical: 15),
@@ -260,7 +263,7 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                       onPressed: () async {
                         if (user == null) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Please login to chat')),
+                            SnackBar(content: Text(l10n.pleaseLoginToChat)),
                           );
                           return;
                         }
@@ -306,13 +309,13 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                           if (context.mounted) {
                             Navigator.pop(context); // Hide loading
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error starting chat: $e')),
+                              SnackBar(content: Text(l10n.errorStartingChat)),
                             );
                           }
                         }
                       },
                       icon: const Icon(Icons.chat, color: Colors.white),
-                      label: const Text('Chat', style: TextStyle(color: Colors.white)),
+                      label: Text(l10n.chat, style: const TextStyle(color: Colors.white)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF3B3B98),
                         padding: const EdgeInsets.symmetric(vertical: 15),
@@ -333,14 +336,14 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.blue),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.info, color: Colors.blue),
-                    SizedBox(width: 12),
+                    const Icon(Icons.info, color: Colors.blue),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'This is your book',
-                        style: TextStyle(
+                        l10n.thisIsYourBook,
+                        style: const TextStyle(
                           color: Colors.blue,
                           fontWeight: FontWeight.w600,
                         ),

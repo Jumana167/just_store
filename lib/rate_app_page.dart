@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'dart:convert';
 import 'settings_page.dart';
+import 'app_theme.dart';
 
 class RateAppPage extends StatefulWidget {
   const RateAppPage({super.key});
@@ -56,11 +58,11 @@ class _RateAppPageState extends State<RateAppPage> {
       allRatings.add(newRating);
       await prefs.setString('app_ratings', json.encode(allRatings));
 
-      // ✅ حل المشكلة: تأكدي إن الـ context بعده موجود
       if (!mounted) return;
 
+      final l10n = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✅ Feedback submitted successfully!')),
+        SnackBar(content: Text(l10n.feedbackSubmitted)),
       );
 
       setState(() {
@@ -83,11 +85,12 @@ class _RateAppPageState extends State<RateAppPage> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = Theme.of(context).textTheme.bodyLarge?.color;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF3B3B98),
+        backgroundColor: AppTheme.primaryBlue,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () {
@@ -97,7 +100,7 @@ class _RateAppPageState extends State<RateAppPage> {
             );
           },
         ),
-        title: const Text('APP Rate', style: TextStyle(color: Colors.white)),
+        title: Text(l10n.rateApp, style: const TextStyle(color: Colors.white)),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -110,12 +113,12 @@ class _RateAppPageState extends State<RateAppPage> {
                 children: [
                   Image.asset('assets/bag_icon.png', height: 90),
                   const SizedBox(width: 12),
-                  const Text(
-                    'Hello Friends',
-                    style: TextStyle(
+                  Text(
+                    l10n.helloFriends,
+                    style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF3B3B98),
+                      color: AppTheme.primaryBlue,
                       fontFamily: 'AgentOrange',
                     ),
                   ),
@@ -129,14 +132,14 @@ class _RateAppPageState extends State<RateAppPage> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: RichText(
                 text: TextSpan(
-                  text: 'What do you think about ',
+                  text: l10n.whatDoYouThink,
                   style: TextStyle(color: textColor, fontSize: 16),
-                  children: const [
+                  children: [
                     TextSpan(
-                      text: 'Just Store',
-                      style: TextStyle(color: Color(0xFF3B3B98), fontWeight: FontWeight.bold),
+                      text: ' Just Store',
+                      style: const TextStyle(color: AppTheme.primaryBlue, fontWeight: FontWeight.bold),
                     ),
-                    TextSpan(text: ' app?'),
+                    TextSpan(text: l10n.appQuestion),
                   ],
                 ),
                 textAlign: TextAlign.center,
@@ -150,25 +153,25 @@ class _RateAppPageState extends State<RateAppPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildEmojiWithLabel('bad', 'assets/emoji_bad.png', 'Bad'),
-                  _buildEmojiWithLabel('ok', 'assets/emoji_ok.png', 'OK!'),
-                  _buildEmojiWithLabel('good', 'assets/emoji_good.png', 'Good'),
-                  _buildEmojiWithLabel('amazing', 'assets/emoji_amazing.png', 'Amazing'),
+                  _buildEmojiWithLabel('bad', 'assets/emoji_bad.png', l10n.bad),
+                  _buildEmojiWithLabel('ok', 'assets/emoji_ok.png', l10n.ok),
+                  _buildEmojiWithLabel('good', 'assets/emoji_good.png', l10n.good),
+                  _buildEmojiWithLabel('amazing', 'assets/emoji_amazing.png', l10n.amazing),
                 ],
               ),
             ),
 
             const SizedBox(height: 25),
 
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  '✪ Let us know if you have ideas to improve the app:',
-                  style: TextStyle(
+                  l10n.letUsKnow,
+                  style: const TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF3B3B98),
+                    color: AppTheme.primaryBlue,
                     fontSize: 14,
                   ),
                 ),
@@ -183,9 +186,9 @@ class _RateAppPageState extends State<RateAppPage> {
                 style: TextStyle(color: textColor),
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: isDark ? Colors.grey[900] : Colors.white,
-                  hintText: 'Type here...',
-                  hintStyle: TextStyle(color: Colors.grey[500]),
+                  fillColor: isDark ? AppTheme.darkGrey : AppTheme.white,
+                  hintText: l10n.typeHere,
+                  hintStyle: TextStyle(color: AppTheme.mediumGrey),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
@@ -204,18 +207,18 @@ class _RateAppPageState extends State<RateAppPage> {
                   ElevatedButton(
                     onPressed: _submitFeedback,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1746A2),
+                      backgroundColor: AppTheme.primaryBlue,
                       padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
                     ),
-                    child: const Text('SUBMIT', style: TextStyle(color: Colors.white)),
+                    child: Text(l10n.submit, style: const TextStyle(color: Colors.white)),
                   ),
                   ElevatedButton(
                     onPressed: _cancel,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1746A2),
+                      backgroundColor: AppTheme.primaryBlue,
                       padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
                     ),
-                    child: const Text('CANCEL', style: TextStyle(color: Colors.white)),
+                    child: Text(l10n.cancel, style: const TextStyle(color: Colors.white)),
                   ),
                 ],
               ),
@@ -224,7 +227,7 @@ class _RateAppPageState extends State<RateAppPage> {
         ),
       ),
       bottomNavigationBar: const BottomAppBar(
-        color: Color(0xFF3B3B98),
+        color: AppTheme.primaryBlue,
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: 40, vertical: 10),
           child: Row(
@@ -247,18 +250,22 @@ class _RateAppPageState extends State<RateAppPage> {
         GestureDetector(
           onTap: () => _selectEmoji(key),
           child: Container(
-            padding: const EdgeInsets.all(6),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: isSelected
-                  ? Border.all(color: const Color(0xFF3B3B98), width: 3)
-                  : null,
+              color: isSelected ? AppTheme.primaryBlue.withOpacity(0.1) : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Image.asset(assetPath, height: 60, width: 60),
+            child: Image.asset(assetPath, height: 40),
           ),
         ),
-        const SizedBox(height: 6),
-        Text(label),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? AppTheme.primaryBlue : AppTheme.mediumGrey,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
       ],
     );
   }

@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class Message {
   final String? id;
@@ -82,7 +82,7 @@ class Message {
 
 class ChatRoom {
   final String id;
-  final List<String> participants;
+  final List<String> users;
   final Map<String, String> userNames;
   final Map<String, String> userAvatars;
   final DateTime createdAt;
@@ -94,7 +94,7 @@ class ChatRoom {
 
   ChatRoom({
     required this.id,
-    required this.participants,
+    required this.users,
     required this.userNames,
     required this.userAvatars,
     required this.createdAt,
@@ -105,7 +105,6 @@ class ChatRoom {
     required this.unreadCount,
   });
 
-  // تحويل من Firestore إلى ChatRoom
   factory ChatRoom.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
 
@@ -113,9 +112,9 @@ class ChatRoom {
     final createdAt = data['createdAt'] as Timestamp?;
     final lastMessageTime = data['lastMessageTime'] as Timestamp?;
 
-    // تحويل المشاركين
-    final participantsData = data['participants'] as List?;
-    final participants = participantsData?.map((e) => e.toString()).toList() ?? [];
+    // تحويل المستخدمين
+    final usersData = data['users'] as List?;
+    final users = usersData?.map((e) => e.toString()).toList() ?? [];
 
     // تحويل أسماء المستخدمين
     final userNamesData = data['userNames'] as Map<String, dynamic>? ?? {};
@@ -137,22 +136,21 @@ class ChatRoom {
 
     return ChatRoom(
       id: doc.id,
-      participants: participants,
+      users: users,
       userNames: userNames,
       userAvatars: userAvatars,
       createdAt: createdAt?.toDate() ?? DateTime.now(),
-      lastMessage: data['lastMessage'] ?? '',
+      lastMessage: data['lastMessage']?.toString() ?? '',
       lastMessageTime: lastMessageTime?.toDate() ?? DateTime.now(),
-      lastMessageType: data['lastMessageType'] ?? 'text',
+      lastMessageType: data['lastMessageType']?.toString() ?? 'text',
       typing: typing,
       unreadCount: unreadCount,
     );
   }
 
-  // تحويل ChatRoom إلى Map
   Map<String, dynamic> toMap() {
     return {
-      'participants': participants,
+      'users': users,
       'userNames': userNames,
       'userAvatars': userAvatars,
       'createdAt': Timestamp.fromDate(createdAt),
@@ -166,7 +164,7 @@ class ChatRoom {
 
   // الحصول على اسم المستخدم الآخر
   String getOtherUserName(String currentUserId) {
-    final otherUserId = participants.firstWhere(
+    final otherUserId = users.firstWhere(
           (id) => id != currentUserId,
       orElse: () => '',
     );
@@ -175,7 +173,7 @@ class ChatRoom {
 
   // الحصول على صورة المستخدم الآخر
   String getOtherUserAvatar(String currentUserId) {
-    final otherUserId = participants.firstWhere(
+    final otherUserId = users.firstWhere(
           (id) => id != currentUserId,
       orElse: () => '',
     );
@@ -184,7 +182,7 @@ class ChatRoom {
 
   // الحصول على معرف المستخدم الآخر
   String getOtherUserId(String currentUserId) {
-    return participants.firstWhere(
+    return users.firstWhere(
           (id) => id != currentUserId,
       orElse: () => '',
     );

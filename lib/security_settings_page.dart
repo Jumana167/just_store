@@ -39,7 +39,7 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
       await reauthenticateUser(currentPasswordController.text.trim());
 
       if (emailController.text.trim() != user?.email) {
-        await user?.updateEmail(emailController.text.trim());
+        await _updateEmail(emailController.text.trim());
         await user?.sendEmailVerification();
         _showSuccess('✔ Email updated. Check your Outlook.');
         setState(() => isLoading = false);
@@ -63,6 +63,26 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
       _showError('❌ ${e.toString()}');
     } finally {
       setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _updateEmail(String newEmail) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await user.verifyBeforeUpdateEmail(newEmail);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Verification email sent. Please check your inbox.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating email: $e')),
+        );
+      }
     }
   }
 

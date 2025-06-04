@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_theme.dart';
 
 class SuccessPage extends StatefulWidget {
   const SuccessPage({super.key});
@@ -35,7 +36,7 @@ class _SuccessPageState extends State<SuccessPage> with SingleTickerProviderStat
         width: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFF3B82F6), Color(0xFFF0F4FF)],
+            colors: [AppTheme.primaryBlue, Color(0xFFF0F4FF)],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),

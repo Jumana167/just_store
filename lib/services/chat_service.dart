@@ -41,6 +41,7 @@ class ChatService {
 
     if (!chatRoomDoc.exists) {
       await _firestore.collection('chat_rooms').doc(chatRoomId).set({
+        'users': [currentUserId, recipientId],
         'participants': [currentUserId, recipientId],
         'userNames': {
           currentUserId!: currentUserName,
@@ -68,15 +69,14 @@ class ChatService {
     return chatRoomId;
   }
 
-  // الحصول على قائمة المحادثات
+  // الحصول على قائمة المحادثات - ✅ مصححة للتعامل مع كلا البنيتين
   Stream<QuerySnapshot> getChatRooms() {
     if (currentUserId == null) throw Exception('User not logged in');
 
     return _firestore
         .collection('chat_rooms')
-        .where('participants', arrayContains: currentUserId)
-        .orderBy('lastMessageTime', descending: true)
-        .snapshots();
+        .where('users', arrayContains: currentUserId)
+        .snapshots(); // ✅ إزالة orderBy - سيتم الترتيب في الكود
   }
 
   // الحصول على رسائل محادثة
@@ -98,8 +98,8 @@ class ChatService {
 
     return await _firestore
         .collection('users')
-        .where('username', isGreaterThanOrEqualTo: query.toLowerCase())
-        .where('username', isLessThanOrEqualTo: query.toLowerCase() + '\uf8ff')
+        .where('displayName', isGreaterThanOrEqualTo: query)
+        .where('displayName', isLessThanOrEqualTo: query + '\uf8ff')
         .limit(20)
         .get();
   }

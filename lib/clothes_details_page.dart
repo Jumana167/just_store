@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'chat_page.dart';
 import '../services/chat_service.dart';
+import 'app_theme.dart';
 
 class ClothesDetailsPage extends StatelessWidget {
   final String image;
@@ -39,18 +41,20 @@ class ClothesDetailsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context)!;
     final user = FirebaseAuth.instance.currentUser;
     final isOwnProduct = user?.uid == recipientId;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(title),
-        backgroundColor: const Color(0xFF3B3B98),
-        foregroundColor: Colors.white,
+        backgroundColor: AppTheme.primaryBlue,
+        foregroundColor: AppTheme.white,
         centerTitle: true,
       ),
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -68,14 +72,14 @@ class ClothesDetailsPage extends StatelessWidget {
                 errorBuilder: (context, error, stackTrace) => Container(
                   height: 250,
                   width: double.infinity,
-                  color: Colors.grey[300],
+                  color: theme.colorScheme.surface,
                   child: const Icon(Icons.checkroom, size: 64),
                 ),
               )
                   : Container(
                 height: 250,
                 width: double.infinity,
-                color: Colors.grey[300],
+                color: theme.colorScheme.surface,
                 child: const Icon(Icons.checkroom, size: 64),
               ),
             ),
@@ -94,8 +98,7 @@ class ClothesDetailsPage extends StatelessWidget {
               description,
               style: TextStyle(
                 fontSize: 16,
-                color: isDark ? Colors.grey[300] : Colors.grey[700],
-                height: 1.5,
+                color: isDark ? theme.textTheme.bodyLarge?.color : AppTheme.darkGrey,
               ),
               textAlign: TextAlign.center,
             ),
@@ -110,7 +113,7 @@ class ClothesDetailsPage extends StatelessWidget {
                 border: Border.all(color: Colors.green),
               ),
               child: Text(
-                '$price JD',
+                '$price ${l10n.jd}',
                 style: const TextStyle(
                   fontSize: 22,
                   color: Colors.green,
@@ -144,9 +147,9 @@ class ClothesDetailsPage extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Seller',
-                            style: TextStyle(
+                          Text(
+                            l10n.seller,
+                            style: const TextStyle(
                               fontSize: 12,
                               color: Colors.grey,
                             ),
@@ -167,9 +170,9 @@ class ClothesDetailsPage extends StatelessWidget {
               const SizedBox(height: 30),
 
               // أزرار التواصل
-              const Text(
-                'Contact Seller',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              Text(
+                l10n.contactSeller,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 15),
 
@@ -181,7 +184,7 @@ class ClothesDetailsPage extends StatelessWidget {
                           ? () => _makePhoneCall(phoneNumber)
                           : null,
                       icon: const Icon(Icons.call, color: Colors.white),
-                      label: const Text('Call', style: TextStyle(color: Colors.white)),
+                      label: Text(l10n.call, style: const TextStyle(color: Colors.white)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         padding: const EdgeInsets.symmetric(vertical: 15),
@@ -197,7 +200,7 @@ class ClothesDetailsPage extends StatelessWidget {
                       onPressed: () async {
                         if (user == null) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Please login to chat')),
+                            SnackBar(content: Text(l10n.pleaseLoginToChat)),
                           );
                           return;
                         }
@@ -243,15 +246,15 @@ class ClothesDetailsPage extends StatelessWidget {
                           if (context.mounted) {
                             Navigator.pop(context); // Hide loading
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Error starting chat: $e')),
+                              SnackBar(content: Text(l10n.errorStartingChat)),
                             );
                           }
                         }
                       },
                       icon: const Icon(Icons.chat, color: Colors.white),
-                      label: const Text('Chat', style: TextStyle(color: Colors.white)),
+                      label: Text(l10n.chat, style: const TextStyle(color: Colors.white)),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF3B3B98),
+                        backgroundColor: AppTheme.primaryBlue,
                         padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -266,19 +269,19 @@ class ClothesDetailsPage extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
+                  color: AppTheme.withOpacity(AppTheme.primaryBlue, 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue),
+                  border: Border.all(color: AppTheme.primaryBlue),
                 ),
-                child: const Row(
+                child: Row(
                   children: [
-                    Icon(Icons.info, color: Colors.blue),
-                    SizedBox(width: 12),
+                    Icon(Icons.info, color: AppTheme.primaryBlue),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         'This is your item',
                         style: TextStyle(
-                          color: Colors.blue,
+                          color: AppTheme.primaryBlue,
                           fontWeight: FontWeight.w600,
                         ),
                       ),

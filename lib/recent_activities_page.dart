@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'app_theme.dart';
 
 class RecentActivitiesPage extends StatefulWidget {
   const RecentActivitiesPage({super.key});
@@ -43,16 +44,15 @@ class _RecentActivitiesPageState extends State<RecentActivitiesPage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    const titleColor = Color(0xFF3B3B98);
-    final textColor = isDark ? Colors.white : Colors.black;
+    final textColor = isDark ? AppTheme.white : AppTheme.darkGrey;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: titleColor,
-        title: const Text('Recent Activities', style: TextStyle(color: Colors.white)),
+        backgroundColor: AppTheme.primaryBlue,
+        title: const Text('Recent Activities', style: TextStyle(color: AppTheme.white)),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back, color: AppTheme.white),
           onPressed: () => Navigator.pop(context),
         ),
         centerTitle: true,
@@ -66,15 +66,15 @@ class _RecentActivitiesPageState extends State<RecentActivitiesPage> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: titleColor,
+                color: AppTheme.primaryBlue,
               ),
             ),
             const SizedBox(height: 10),
             ...orderHistory.map((item) => Card(
-                  color: isDark ? Colors.grey[900] : Colors.grey[100],
+                  color: isDark ? AppTheme.darkGrey : AppTheme.lightGrey,
                   child: ListTile(
                     title: Text(item, style: TextStyle(color: textColor)),
-                    trailing: Icon(Icons.delete, color: Colors.red.shade400),
+                    trailing: Icon(Icons.delete, color: AppTheme.error),
                     onTap: () => _confirmDelete(item: item, isOrder: true),
                   ),
                 )),
@@ -84,15 +84,15 @@ class _RecentActivitiesPageState extends State<RecentActivitiesPage> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: titleColor,
+                color: AppTheme.primaryBlue,
               ),
             ),
             const SizedBox(height: 10),
             ...productHistory.map((item) => Card(
-                  color: isDark ? Colors.grey[900] : Colors.grey[100],
+                  color: isDark ? AppTheme.darkGrey : AppTheme.lightGrey,
                   child: ListTile(
                     title: Text(item, style: TextStyle(color: textColor)),
-                    trailing: Icon(Icons.delete, color: Colors.red.shade400),
+                    trailing: Icon(Icons.delete, color: AppTheme.error),
                     onTap: () => _confirmDelete(item: item, isOrder: false),
                   ),
                 )),

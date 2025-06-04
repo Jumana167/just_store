@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'login_page_v2.dart';
 import 'settings_page.dart';
+import 'app_theme.dart';
 
 class TermsAndConditionsPage extends StatelessWidget {
   const TermsAndConditionsPage({super.key});
@@ -8,17 +9,17 @@ class TermsAndConditionsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? Colors.black : const Color(0xFFF3F8FC);
-    final primaryTextColor = isDark ? Colors.white : Colors.black;
-    final secondaryTextColor = isDark ? Colors.white70 : Colors.black87;
+    final bgColor = isDark ? AppTheme.black : AppTheme.lightGrey;
+    final primaryTextColor = isDark ? AppTheme.white : AppTheme.darkGrey;
+    final secondaryTextColor = isDark ? AppTheme.withOpacity(AppTheme.white, 0.7) : AppTheme.withOpacity(AppTheme.darkGrey, 0.87);
 
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: isDark ? const Color(0xFF3B3B98) : const Color(0xFF3B3B98),
-        title: Text('Terms & Conditions', style: TextStyle(color: isDark ? Colors.white : Colors.white)),
+        backgroundColor: AppTheme.primaryBlue,
+        title: const Text('Terms & Conditions', style: TextStyle(color: AppTheme.white)),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : Colors.white),
+          icon: const Icon(Icons.arrow_back, color: AppTheme.white),
           onPressed: () => Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const SettingsPage()),
@@ -37,7 +38,7 @@ class TermsAndConditionsPage extends StatelessWidget {
               children: [
                 Text(
                   'Last Updated: April 7, 2025',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.blue[200] : const Color(0xFF1746A2)),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryBlue),
                 ),
                 const SizedBox(height: 15),
                 Text(
@@ -145,14 +146,31 @@ class TermsAndConditionsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionTitle(String title, Color textColor) {
+  Widget _buildSectionTitle(String title, Color color) {
     return Padding(
-      padding: const EdgeInsets.only(top: 15, bottom: 5),
-      child: Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+      ),
     );
   }
 
-  Widget _buildParagraph(String text, Color textColor) {
-    return Text(text, style: TextStyle(color: textColor));
+  Widget _buildParagraph(String text, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 16,
+          color: color,
+          height: 1.5,
+        ),
+      ),
+    );
   }
 }

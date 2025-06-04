@@ -3,25 +3,22 @@ import 'package:flutter/material.dart';
 
 class AppTheme {
   // الألوان الأساسية للتطبيق
-  static const Color primaryBlue = Color(0xFF3B3B98);
-  static const Color lightBlue = Color(0xFF1976D2);
-  static const Color accentBlue = Color(0xFF42A5F5);
-  static const Color darkBlue = Color(0xFF1746A2);
-  static const Color gradientStart = Color(0xFF3891D6);
-  static const Color gradientEnd = Color(0xFF170557);
+  static const Color primaryBlue = Color(0xFF1976D2);  // أزرق فاتح
+  static const Color accentBlue = Color(0xFF42A5F5);   // أزرق متوسط
+  static const Color success = Color(0xFF4CAF50);      // أخضر للنجاح
+  static const Color info = Color(0xFF2196F3);         // أزرق للمعلومات
+  static const Color warning = Color(0xFFFFC107);      // أصفر للتحذير
+  static const Color error = Color(0xFFF44336);        // أحمر للخطأ
+  static const Color white = Color(0xFFFFFFFF);        // أبيض
+  static const Color black = Color(0xFF000000);        // أسود
+  static const Color darkGrey = Color(0xFF2C3E50);     // رمادي داكن
+  static const Color mediumGrey = Color(0xFF7F8C8D);   // رمادي متوسط
+  static const Color lightGrey = Color(0xFFF8FAFB);    // رمادي فاتح
+  static const Color borderGrey = Color(0xFFE0E0E0);   // رمادي للحدود
 
   // الألوان المحايدة
-  static const Color white = Colors.white;
-  static const Color lightGrey = Color(0xFFF8FAFB);
-  static const Color mediumGrey = Color(0xFF9E9E9E);
-  static const Color darkGrey = Color(0xFF2C3E50);
-  static const Color borderGrey = Color(0xFFE0E0E0);
-
-  // الألوان الوظيفية
-  static const Color success = Color(0xFF4CAF50);
-  static const Color warning = Color(0xFFFF9800);
-  static const Color error = Color(0xFFFF5722);
-  static const Color info = Color(0xFF2196F3);
+  static const Color gradientStart = Color(0xFF3891D6); // بداية التدرج
+  static const Color gradientEnd = Color(0xFF170557);   // نهاية التدرج
 
   // التدرجات
   static const LinearGradient primaryGradient = LinearGradient(
@@ -31,13 +28,14 @@ class AppTheme {
   );
 
   static const LinearGradient cardGradient = LinearGradient(
-    colors: [lightBlue, accentBlue],
+    colors: [primaryBlue, accentBlue],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   // النمط الفاتح
   static ThemeData lightTheme = ThemeData(
+    useMaterial3: true,
     primarySwatch: createMaterialColor(primaryBlue),
     primaryColor: primaryBlue,
     scaffoldBackgroundColor: lightGrey,
@@ -82,10 +80,16 @@ class AppTheme {
       onSurface: darkGrey,
       onError: white,
     ),
+    textTheme: const TextTheme(
+      bodyLarge: TextStyle(color: darkGrey),
+      bodyMedium: TextStyle(color: darkGrey),
+      titleLarge: TextStyle(color: darkGrey),
+    ),
   );
 
   // النمط المظلم
   static ThemeData darkTheme = ThemeData(
+    useMaterial3: true,
     primarySwatch: createMaterialColor(primaryBlue),
     primaryColor: primaryBlue,
     scaffoldBackgroundColor: const Color(0xFF121212),
@@ -119,27 +123,40 @@ class AppTheme {
       onSurface: white,
       onError: white,
     ),
+    textTheme: const TextTheme(
+      bodyLarge: TextStyle(color: white),
+      bodyMedium: TextStyle(color: white),
+      titleLarge: TextStyle(color: white),
+    ),
   );
 
   // مساعد لإنشاء MaterialColor من Color
   static MaterialColor createMaterialColor(Color color) {
-    List strengths = <double>[.05];
-    Map<int, Color> swatch = {};
-    final int r = color.red, g = color.green, b = color.blue;
+    final List<int> strengths = <int>[50];
+    final Map<int, Color> swatch = {};
+    final int r = color.red;
+    final int g = color.green;
+    final int b = color.blue;
 
     for (int i = 1; i < 10; i++) {
-      strengths.add(0.1 * i);
+      strengths.add(i * 100);
     }
-    for (var strength in strengths) {
-      final double ds = 0.5 - strength;
-      swatch[(strength * 1000).round()] = Color.fromRGBO(
-        r + ((ds < 0 ? r : (255 - r)) * ds).round(),
-        g + ((ds < 0 ? g : (255 - g)) * ds).round(),
-        b + ((ds < 0 ? b : (255 - b)) * ds).round(),
-        1,
-      );
+
+    for (final strength in strengths) {
+      final double ds = 0.5 - (strength / 1000);
+      final int r1 = (r + ((ds < 0 ? r : (255 - r)) * ds)).round();
+      final int g1 = (g + ((ds < 0 ? g : (255 - g)) * ds)).round();
+      final int b1 = (b + ((ds < 0 ? b : (255 - b)) * ds)).round();
+      swatch[strength] = Color.fromRGBO(r1, g1, b1, 1);
     }
+
     return MaterialColor(color.value, swatch);
+  }
+
+  // Helper methods for colors
+  static Color withOpacity(Color color, double opacity) {
+    final int alpha = (opacity * 255).round();
+    return Color.fromARGB(alpha, color.red, color.green, color.blue);
   }
 }
 
@@ -186,7 +203,7 @@ class AppWidgets {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.primaryBlue.withOpacity(0.3),
+            color: AppTheme.withOpacity(AppTheme.primaryBlue, 0.3),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -203,30 +220,30 @@ class AppWidgets {
         ),
         child: isLoading
             ? const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(
-            color: AppTheme.white,
-            strokeWidth: 2,
-          ),
-        )
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  color: AppTheme.white,
+                  strokeWidth: 2,
+                ),
+              )
             : Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, color: AppTheme.white),
-              const SizedBox(width: 8),
-            ],
-            Text(
-              text,
-              style: const TextStyle(
-                color: AppTheme.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, color: AppTheme.white),
+                    const SizedBox(width: 8),
+                  ],
+                  Text(
+                    text,
+                    style: const TextStyle(
+                      color: AppTheme.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
