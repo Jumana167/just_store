@@ -10,6 +10,9 @@ import 'app_theme.dart';
 import 'models/categories.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class AddProductPage extends StatefulWidget {
   final String? postId;
@@ -31,6 +34,8 @@ class _AddProductPageState extends State<AddProductPage> {
   final _descCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   final _locationCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _whatsappCtrl = TextEditingController();
 
   String? selectedCategory;
   String? selectedCondition;
@@ -42,6 +47,7 @@ class _AddProductPageState extends State<AddProductPage> {
   String? _imageUrl;
   bool _isLoading = false;
   final picker = ImagePicker();
+  int? _selectedContactMethod; // 0: chat, 1: whatsapp, 2: phone
 
   // Using unified categories from categories.dart
   List<String> get _categories => kAppCategories
@@ -151,39 +157,6 @@ class _AddProductPageState extends State<AddProductPage> {
     return json.decode(responseBody)['secure_url'];
   }
 
-  Future<void> _uploadImage() async {
-    try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-      
-      if (image != null) {
-        setState(() {
-          _isLoading = true;
-        });
-
-        final String fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
-        final Reference ref = FirebaseStorage.instance.ref().child('product_images/$fileName');
-        final UploadTask uploadTask = ref.putFile(File(image.path));
-        final TaskSnapshot snapshot = await uploadTask;
-        final String downloadUrl = await snapshot.ref.getDownloadURL();
-
-        setState(() {
-          _imageUrl = downloadUrl;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error uploading image: $e')),
-        );
-      }
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
     if (!_formKey.currentState!.validate() ||
@@ -213,6 +186,14 @@ class _AddProductPageState extends State<AddProductPage> {
       }
 
       final user = FirebaseAuth.instance.currentUser;
+      String ownerName = user?.displayName ?? '';
+      if (ownerName.isEmpty && user != null) {
+        // جلب الاسم من Realtime Database إذا لم يكن موجوداً في displayName
+        final snapshot = await FirebaseDatabase.instance.ref('users/${user.uid}/name').get();
+        if (snapshot.exists) {
+          ownerName = snapshot.value as String;
+        }
+      }
       
       if (isEditing) {
         final updateData = {
@@ -226,6 +207,9 @@ class _AddProductPageState extends State<AddProductPage> {
           'college': selectedCollege,
           'studyYear': selectedStudyYear,
           'subCategory': selectedSubCategory,
+          'contactMethod': _selectedContactMethod,
+          'whatsapp': _whatsappCtrl.text,
+          'phone': _phoneCtrl.text,
         };
         
         await FirebaseFirestore.instance
@@ -245,11 +229,14 @@ class _AddProductPageState extends State<AddProductPage> {
           'studyYear': selectedStudyYear,
           'subCategory': selectedSubCategory,
           'ownerId': user?.uid ?? '',
-          'ownerName': user?.displayName ?? '',
+          'ownerName': ownerName,
           'ownerAvatar': user?.photoURL ?? '',
           'timestamp': FieldValue.serverTimestamp(),
           'likesCount': 0,
           'likedBy': [],
+          'contactMethod': _selectedContactMethod,
+          'whatsapp': _whatsappCtrl.text,
+          'phone': _phoneCtrl.text,
         };
         
         await FirebaseFirestore.instance.collection('posts').add(newPostData);
@@ -397,6 +384,14 @@ class _AddProductPageState extends State<AddProductPage> {
                 ),
 
               const SizedBox(height: 20),
+              // خيارات التواصل الدائرية
+              ContactOptions(
+                selected: _selectedContactMethod,
+                onSelect: (val) => setState(() => _selectedContactMethod = val),
+                whatsappController: _whatsappCtrl,
+                phoneController: _phoneCtrl,
+              ),
+              const SizedBox(height: 20),
               AppWidgets.buildPrimaryButton(
                 text: isEditing ? l10n.save : l10n.publish,
                 onPressed: _submit,
@@ -524,6 +519,103 @@ class _AddProductPageState extends State<AddProductPage> {
         filled: true,
         fillColor: theme.cardColor,
       ),
+    );
+  }
+}
+
+class ContactOptions extends StatelessWidget {
+  final int? selected;
+  final void Function(int) onSelect;
+  final TextEditingController whatsappController;
+  final TextEditingController phoneController;
+
+  const ContactOptions({
+    super.key,
+    required this.selected,
+    required this.onSelect,
+    required this.whatsappController,
+    required this.phoneController,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            InkWell(
+              onTap: () => onSelect(0),
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: selected == 0 ? Colors.orange : Colors.grey[300],
+                    child: Icon(Icons.chat, color: selected == 0 ? Colors.white : Colors.black),
+                    radius: 28,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(l10n.contactViaApp, style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            InkWell(
+              onTap: () => onSelect(1),
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: selected == 1 ? Colors.green : Colors.grey[300],
+                    child: FaIcon(FontAwesomeIcons.whatsapp, color: selected == 1 ? Colors.white : Colors.black),
+                    radius: 28,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(l10n.contactViaWhatsApp, style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            InkWell(
+              onTap: () => onSelect(2),
+              child: Column(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: selected == 2 ? Colors.blue : Colors.grey[300],
+                    child: Icon(Icons.phone, color: selected == 2 ? Colors.white : Colors.black),
+                    radius: 28,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(l10n.contactViaPhone, style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        if (selected == 1)
+          TextField(
+            controller: whatsappController,
+            keyboardType: TextInputType.phone,
+            decoration: InputDecoration(
+              labelText: l10n.whatsappNumber,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        if (selected == 2)
+          TextField(
+            controller: phoneController,
+            keyboardType: TextInputType.phone,
+            decoration: InputDecoration(
+              labelText: l10n.phoneNumber,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+        if (selected == 0)
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Text(l10n.contactAppHint, style: const TextStyle(color: Colors.orange)),
+          ),
+      ],
     );
   }
 }

@@ -5,15 +5,15 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "users",
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "participants",
           "arrayConfig": "CONTAINS"
         },
         {
           "fieldPath": "lastMessageTime",
-          "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "__name__",
           "order": "DESCENDING"
         }
       ]
@@ -27,6 +27,10 @@
           "order": "ASCENDING"
         },
         {
+          "fieldPath": "isRead",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "timestamp",
           "order": "DESCENDING"
         }
@@ -36,10 +40,6 @@
       "collectionGroup": "messages",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "isRead",
-          "order": "ASCENDING"
-        },
         {
           "fieldPath": "timestamp",
           "order": "DESCENDING"

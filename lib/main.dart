@@ -14,8 +14,11 @@ import 'providers/language_provider.dart';
 import 'splash_screen.dart';
 import 'verify_code_page.dart';
 import 'home_page.dart';
+import 'success_page.dart'; // 📝 إضافة صفحة النجاح
 import 'firebase_options.dart';
 import 'services/notification_service.dart';
+import 'auth_service.dart';
+
 // 🔔 Local notifications plugin instance
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
@@ -80,39 +83,96 @@ Future<void> main() async {
   );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  final AuthService _authService = AuthService();
+
+  @override
+  void initState() {
+    super.initState();
+    _setupAuthListener();
+  }
+
+  // ✅ إعداد AuthStateListener لحفظ بيانات المستخدمين تلقائياً
+  void _setupAuthListener() {
+    FirebaseAuth.instance.authStateChanges().listen((User? user) {
+      if (user != null) {
+        debugPrint('👤 User logged in: ${user.email}');
+        // حفظ/تحديث بيانات المستخدم عند تسجيل الدخول
+        _authService.saveUserToFirestore(user).catchError((error) {
+          debugPrint('❌ Error saving user data: $error');
+        });
+      } else {
+        debugPrint('👤 User logged out');
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final languageProvider = Provider.of<LanguageProvider>(context);
-    final User? user = FirebaseAuth.instance.currentUser;
 
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'JUST STORE',
-      theme: themeProvider.currentTheme,
-      home: user != null ? const HomePage() : const SplashScreen(),
-      routes: {
-        '/home': (context) => const HomePage(),
-        '/verify': (context) => const VerifyCodePage(email: 'test@example.com'),
-      },
-      localizationsDelegates: const [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [
-        Locale('en'), // English
-        Locale('ar'), // Arabic
-      ],
-      locale: languageProvider.currentLocale,
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
-          child: child!,
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        // أثناء التحقق من حالة المصادقة
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            title: 'JUST STORE',
+            theme: themeProvider.currentTheme,
+            home: const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+          );
+        }
+
+        // المستخدم مسجل دخول أم لا
+        final User? user = snapshot.data;
+
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'JUST STORE',
+          theme: themeProvider.currentTheme,
+
+          // ✅ توجيه المستخدم حسب حالة تسجيل الدخول
+          home: user != null ? const HomePage() : const SplashScreen(),
+
+          routes: {
+            '/home': (context) => const HomePage(),
+            '/verify': (context) => const VerifyCodePage(email: 'test@example.com'),
+            '/success': (context) => const SuccessPage(), // 🎉 إضافة صفحة النجاح
+          },
+
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+
+          supportedLocales: const [
+            Locale('en'), // English
+            Locale('ar'), // Arabic
+          ],
+
+          locale: languageProvider.currentLocale,
+
+          builder: (context, child) {
+            return MediaQuery(
+              data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+              child: child!,
+            );
+          },
         );
       },
     );

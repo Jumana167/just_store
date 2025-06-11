@@ -13,6 +13,21 @@ class SplashScreenState extends State<SplashScreen> with SingleTickerProviderSta
   late AnimationController _controller;
   late Animation<double> _animation;
 
+  // Bag image state
+  String _bagImage = 'assets/snapedit_1749604181301.png';
+
+  void _showSadBag() {
+    setState(() {
+      _bagImage = 'assets/snapedit_1749603572121.png';
+    });
+  }
+
+  void _showNormalBag() {
+    setState(() {
+      _bagImage = 'assets/snapedit_1749604181301.png';
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -59,7 +74,7 @@ class SplashScreenState extends State<SplashScreen> with SingleTickerProviderSta
           child: FadeTransition(
             opacity: _animation,
             child: Image.asset(
-              'assets/shopping_bag.png', // تأكد إن الصورة موجودة في assets
+              _bagImage,
               width: 200,
               height: 200,
               fit: BoxFit.contain,

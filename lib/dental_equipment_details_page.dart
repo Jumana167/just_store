@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'chat_page.dart';
 import '../services/chat_service.dart';
+import 'chat_room_page.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 class DentalEquipmentDetailsPage extends StatelessWidget {
   final String image;
@@ -44,6 +46,7 @@ class DentalEquipmentDetailsPage extends StatelessWidget {
         .brightness == Brightness.dark;
     final user = FirebaseAuth.instance.currentUser;
     final isOwnProduct = user?.uid == recipientId;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
@@ -203,8 +206,7 @@ class DentalEquipmentDetailsPage extends StatelessWidget {
                       onPressed: () async {
                         if (user == null) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('Please login to chat')),
+                            SnackBar(content: Text(l10n.pleaseLoginToChat)),
                           );
                           return;
                         }
@@ -217,19 +219,13 @@ class DentalEquipmentDetailsPage extends StatelessWidget {
                           showDialog(
                             context: context,
                             barrierDismissible: false,
-                            builder: (_) =>
-                            const Center(
+                            builder: (_) => const Center(
                               child: CircularProgressIndicator(),
                             ),
                           );
 
                           // Create or get chat room ID
-                          final String chatRoomId = await chatService
-                              .createOrGetChatRoom(
-                            recipientId,
-                            recipientName,
-                            recipientAvatar,
-                          );
+                          final String chatRoomId = await chatService.createOrGetChatRoom(recipientId);
 
                           if (!context.mounted) return;
 
@@ -240,21 +236,17 @@ class DentalEquipmentDetailsPage extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) =>
-                                  ChatPage(
-                                    chatRoomId: chatRoomId,
-                                    recipientId: recipientId,
-                                    recipientName: recipientName,
-                                    recipientAvatar: recipientAvatar,
-                                  ),
+                              builder: (_) => ChatRoomPage(
+                                chatRoomId: chatRoomId,
+                                recipientId: recipientId,
+                              ),
                             ),
                           );
                         } catch (e) {
                           if (context.mounted) {
                             Navigator.pop(context); // Hide loading
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                  content: Text('Error starting chat: $e')),
+                              SnackBar(content: Text(l10n.errorStartingChat)),
                             );
                           }
                         }

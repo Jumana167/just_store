@@ -5,6 +5,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as path;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'services/user_service.dart';
 
 import 'contact_info_page.dart';
 import 'security_settings_page.dart';
@@ -22,7 +25,7 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStateMixin {
-  File? _imageFile;
+  String? _profileImageUrl;
   String _email = 'hello@reallygreatsite.com';
   int _selectedIndex = 2;
   final int _unreadMessages = 5;
@@ -31,10 +34,15 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
   late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
 
+  double _averageRating = 0.0;
+  int _totalRatings = 0;
+  bool _isLoading = true;
+
   @override
   void initState() {
     super.initState();
     _loadProfileData();
+    _loadUserRatings();
 
     _email = FirebaseAuth.instance.currentUser?.email ?? _email;
 
@@ -60,33 +68,54 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
   }
 
   Future<void> _loadProfileData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final imagePath = prefs.getString('profileImagePath');
-    if (imagePath != null && File(imagePath).existsSync()) {
-      _imageFile = File(imagePath);
+    try {
+      final userService = UserService();
+      final imageUrl = await userService.getProfileImageUrl();
+      if (imageUrl != null) {
+        setState(() {
+          _profileImageUrl = imageUrl;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading profile image: $e')),
+        );
+      }
     }
-    setState(() {});
   }
 
   Future<void> _pickImage() async {
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (picked != null) {
-      final dir = await getApplicationDocumentsDirectory();
-      final fileName = path.basename(picked.path);
-      final savedImage = await File(picked.path).copy('${dir.path}/$fileName');
+      try {
+        // Show loading indicator
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(child: CircularProgressIndicator()),
+        );
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('profileImagePath', savedImage.path);
+        final userService = UserService();
+        final imageUrl = await userService.uploadProfileImage(File(picked.path));
 
-      setState(() {
-        _imageFile = savedImage;
-      });
+        if (!mounted) return;
+        Navigator.pop(context); // Close loading
 
-      if (!mounted) return;
+        setState(() {
+          _profileImageUrl = imageUrl;
+        });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✅ Profile image changed successfully')),
-      );
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✅ Profile image updated successfully')),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        Navigator.pop(context); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating profile image: $e')),
+        );
+      }
     }
   }
 
@@ -131,104 +160,127 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     }
   }
 
+  Future<void> _loadUserRatings() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final userService = UserService();
+      final ratingsData = await userService.getUserRatings(user.uid);
+
+      setState(() {
+        _averageRating = ratingsData['averageRating'];
+        _totalRatings = ratingsData['totalRatings'];
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading ratings: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppWidgets.buildAppBar(title: 'Profile'),
+      appBar: AppWidgets.buildAppBar(title: l10n.profile),
       body: FadeTransition(
         opacity: _fadeAnimation,
         child: SlideTransition(
           position: _slideAnimation,
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                const SizedBox(height: 16),
-                GestureDetector(
-                  onTap: _pickImage,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: AppTheme.primaryGradient,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppTheme.primaryBlue.withOpacity(0.3),
-                          blurRadius: 15,
-                          offset: const Offset(0, 8),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  const SizedBox(height: 16),
+                  _buildProfileImage(),
+                  const SizedBox(height: 12),
+                  TweenAnimationBuilder<double>(
+                    duration: const Duration(milliseconds: 800),
+                    tween: Tween(begin: 0.0, end: 1.0),
+                    builder: (context, value, child) {
+                      return Opacity(
+                        opacity: value,
+                        child: Transform.translate(
+                          offset: Offset(0, 20 * (1 - value)),
+                          child: Column(
+                            children: [
+                              Text(
+                                widget.userName,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.primaryBlue,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _email,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: AppTheme.mediumGrey,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(3),
-                    child: CircleAvatar(
-                      radius: 50,
-                      backgroundColor: AppTheme.white,
-                      backgroundImage: _imageFile != null ? FileImage(_imageFile!) : null,
-                      child: _imageFile == null
-                          ? const Icon(Icons.person, size: 50, color: AppTheme.primaryBlue)
-                          : null,
-                    ),
+                      );
+                    },
                   ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  widget.userName,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.primaryBlue,
+                  const SizedBox(height: 30),
+                  _buildRatingSection(),
+                  _buildProfileOption(
+                    icon: Icons.phone,
+                    label: 'Contact Info',
+                    color: AppTheme.success,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ContactInfoPage()),
+                      );
+                    },
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _email,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: AppTheme.mediumGrey,
+                  _buildProfileOption(
+                    icon: Icons.history,
+                    label: 'Recent Activities',
+                    color: Colors.pink,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const RecentActivitiesPage()),
+                      );
+                    },
                   ),
-                ),
-                const SizedBox(height: 30),
-                _buildProfileOption(
-                  icon: Icons.phone,
-                  label: 'Contact Info',
-                  color: AppTheme.success,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const ContactInfoPage()),
-                    );
-                  },
-                ),
-                _buildProfileOption(
-                  icon: Icons.history,
-                  label: 'Recent Activities',
-                  color: Colors.pink,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const RecentActivitiesPage()),
-                    );
-                  },
-                ),
-                _buildProfileOption(
-                  icon: Icons.security,
-                  label: 'Security Settings',
-                  color: AppTheme.warning,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => SecuritySettingsPage()),
-                    );
-                  },
-                ),
-                _buildProfileOption(
-                  icon: Icons.logout,
-                  label: 'Log out',
-                  color: AppTheme.error,
-                  isLogout: true,
-                  onTap: _confirmLogout,
-                ),
-              ],
+                  _buildProfileOption(
+                    icon: Icons.security,
+                    label: 'Security Settings',
+                    color: AppTheme.warning,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => SecuritySettingsPage()),
+                      );
+                    },
+                  ),
+                  _buildProfileOption(
+                    icon: Icons.logout,
+                    label: 'Log out',
+                    color: AppTheme.error,
+                    isLogout: true,
+                    onTap: _confirmLogout,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -255,19 +307,28 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
                   Positioned(
                     right: 0,
                     top: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: AppTheme.error,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        '$_unreadMessages',
-                        style: const TextStyle(
-                          color: AppTheme.white,
-                          fontSize: 10,
-                        ),
-                      ),
+                    child: TweenAnimationBuilder<double>(
+                      duration: const Duration(milliseconds: 300),
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      builder: (context, value, child) {
+                        return Transform.scale(
+                          scale: value,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: AppTheme.error,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              '$_unreadMessages',
+                              style: const TextStyle(
+                                color: AppTheme.white,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
               ],
@@ -279,6 +340,95 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     );
   }
 
+  Widget _buildRatingSection() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 800),
+      tween: Tween(begin: 0.0, end: _averageRating / 5),
+      builder: (context, value, child) {
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.05) ?? Colors.grey,
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TweenAnimationBuilder<double>(
+                    duration: const Duration(milliseconds: 800),
+                    tween: Tween(begin: 0.0, end: 1.0),
+                    builder: (context, value, child) {
+                      return Transform.scale(
+                        scale: value,
+                        child: Icon(
+                          Icons.star,
+                          color: Colors.amber,
+                          size: 32,
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  TweenAnimationBuilder<double>(
+                    duration: const Duration(milliseconds: 800),
+                    tween: Tween(begin: 0.0, end: _averageRating),
+                    builder: (context, value, child) {
+                      return Text(
+                        value.toStringAsFixed(1),
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.darkGrey,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TweenAnimationBuilder<double>(
+                duration: const Duration(milliseconds: 800),
+                tween: Tween(begin: 0.0, end: 1.0),
+                builder: (context, value, child) {
+                  return Opacity(
+                    opacity: value,
+                    child: Text(
+                      '$_totalRatings ${_totalRatings == 1 ? 'rating' : 'ratings'}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: AppTheme.mediumGrey,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              LinearProgressIndicator(
+                value: value,
+                backgroundColor: Colors.grey[200],
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.amber),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildProfileOption({
     required IconData icon,
     required String label,
@@ -286,30 +436,98 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
     required VoidCallback onTap,
     bool isLogout = false,
   }) {
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      color: Theme.of(context).cardColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: ListTile(
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 300),
+      tween: Tween(begin: 0.0, end: 1.0),
+      builder: (context, value, child) {
+        return Transform.scale(
+          scale: value,
+          child: Card(
+            elevation: 2,
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            color: Theme.of(context).cardColor,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(icon, color: color),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: isLogout ? FontWeight.bold : FontWeight.normal,
+                          color: isLogout ? AppTheme.error : Theme.of(context).textTheme.bodyLarge?.color,
+                        ),
+                      ),
+                    ),
+                    Icon(Icons.arrow_forward_ios, size: 16, color: AppTheme.mediumGrey),
+                  ],
+                ),
+              ),
+            ),
           ),
-          child: Icon(icon, color: color),
-        ),
-        title: Text(
-          label,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: isLogout ? FontWeight.bold : FontWeight.normal,
-            color: isLogout ? AppTheme.error : Theme.of(context).textTheme.bodyLarge?.color,
-          ),
-        ),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: AppTheme.mediumGrey),
-        onTap: onTap,
+        );
+      },
+    );
+  }
+
+  Widget _buildProfileImage() {
+    return GestureDetector(
+      onTap: _pickImage,
+      child: TweenAnimationBuilder<double>(
+        duration: const Duration(milliseconds: 800),
+        tween: Tween(begin: 0.0, end: 1.0),
+        builder: (context, value, child) {
+          return Transform.scale(
+            scale: value,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: AppTheme.primaryGradient,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.primaryBlue.withOpacity(0.3),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: _profileImageUrl != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(60),
+                      child: Image.network(
+                        _profileImageUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => const Icon(
+                          Icons.person,
+                          size: 60,
+                          color: AppTheme.white,
+                        ),
+                      ),
+                    )
+                  : const Icon(
+                      Icons.person,
+                      size: 60,
+                      color: AppTheme.white,
+                    ),
+            ),
+          );
+        },
       ),
     );
   }

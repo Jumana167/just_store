@@ -1,17 +1,19 @@
 // lib/screens/chat_list_page.dart
 
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_database/firebase_database.dart';
 import '../services/chat_service.dart';
-import '../models/message_model.dart';
 import 'chat_page.dart';
 import 'app_theme.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import '../models/chat_room.dart';
+import 'chat_room_page.dart';
 
 class ChatListPage extends StatefulWidget {
-  const ChatListPage({super.key});
+  const ChatListPage({Key? key}) : super(key: key);
 
   @override
   State<ChatListPage> createState() => _ChatListPageState();
@@ -19,304 +21,116 @@ class ChatListPage extends StatefulWidget {
 
 class _ChatListPageState extends State<ChatListPage> {
   final ChatService _chatService = ChatService();
-  final FirebaseAuth _auth = FirebaseAuth.instance;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  List<Map<String, dynamic>> _searchResults = [];
   bool _isSearching = false;
 
   @override
   void initState() {
     super.initState();
-    _chatService.updateOnlineStatus(true);
   }
 
   @override
   void dispose() {
-    _chatService.updateOnlineStatus(false);
     _searchController.dispose();
     super.dispose();
   }
 
-  // Format elapsed time
-  String _formatTime(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inDays == 0) {
-      return DateFormat('h:mm a').format(dateTime);
-    } else if (difference.inDays == 1) {
-      return 'Yesterday';
-    } else if (difference.inDays < 7) {
-      final List<String> weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-      return weekDays[dateTime.weekday - 1];
-    } else {
-      return DateFormat('dd/MM').format(dateTime);
-    }
-  }
-
-  // Get other user info
-  Map<String, String> _getOtherUserInfo(ChatRoom chatRoom) {
-    final currentUserId = _auth.currentUser?.uid ?? '';
-    final otherUserId = chatRoom.getOtherUserId(currentUserId);
-
-    return {
-      'id': otherUserId,
-      'name': chatRoom.getOtherUserName(currentUserId),
-      'avatar': chatRoom.getOtherUserAvatar(currentUserId),
-    };
-  }
-
-  // Format last message based on type
-  String _formatLastMessage(String message, String type) {
-    switch (type) {
-      case 'image':
-        return '📷 Photo';
-      case 'audio':
-        return '🎵 Audio recording';
-      case 'file':
-        return '📎 File';
-      default:
-        return message;
-    }
-  }
-
-  // Search for users
-  Future<void> _searchUsers() async {
-    if (_searchQuery.isEmpty) {
-      setState(() {
-        _searchResults = [];
-        _isSearching = false;
-      });
-      return;
-    }
-
-    setState(() => _isSearching = true);
-
-    try {
-      final query = await FirebaseFirestore.instance
-          .collection('users')
-          .where('displayName', isGreaterThanOrEqualTo: _searchQuery)
-          .where('displayName', isLessThanOrEqualTo: _searchQuery + '\uf8ff')
-          .limit(10)
-          .get();
-
-      setState(() {
-        _searchResults = query.docs
-            .map((doc) => {
-                  'uid': doc.id,
-                  ...doc.data(),
-                })
-            .toList();
-      });
-    } catch (e) {
-      print('Error searching users: $e');
-    } finally {
-      setState(() => _isSearching = false);
-    }
-  }
-
-  Future<void> _startChat(Map<String, dynamic> userData) async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) return;
-
-    try {
-      final chatService = ChatService();
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator()),
-      );
-
-      final String chatRoomId = await chatService.createOrGetChatRoom(
-        userData['uid'],
-        userData['displayName'] ?? 'User',
-        userData['photoURL'] ?? '',
-      );
-
-      if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ChatPage(
-            chatRoomId: chatRoomId,
-            recipientId: userData['uid'],
-            recipientName: userData['displayName'] ?? 'User',
-            recipientAvatar: userData['photoURL'] ?? '',
-          ),
-        ),
-      );
-
-      // Clear search after starting chat
-      setState(() {
-        _searchQuery = '';
-        _searchResults = [];
-        _searchController.clear();
-      });
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error starting chat')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context);
-    final currentUser = FirebaseAuth.instance.currentUser;
-
-    if (currentUser == null) {
-      return Scaffold(
-        body: Center(
-          child: Text('Please login to view chats'),
-        ),
-      );
-    }
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(l10n?.messages ?? 'Messages'),
-        backgroundColor: theme.primaryColor,
+        title: _isSearching
+            ? TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            hintText: l10n.search,
+            border: InputBorder.none,
+          ),
+          onChanged: (value) {
+            setState(() {
+              _searchQuery = value;
+            });
+          },
+        )
+            : Text(l10n.messages),
         actions: [
           IconButton(
-            icon: const Icon(Icons.person_search),
+            icon: Icon(_isSearching ? Icons.close : Icons.search),
             onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                ),
-                builder: (context) => Padding(
-                  padding: EdgeInsets.only(
-                    bottom: MediaQuery.of(context).viewInsets.bottom,
-                  ),
-                  child: UserSearchSheet(),
-                ),
-              );
+              setState(() {
+                _isSearching = !_isSearching;
+                if (!_isSearching) {
+                  _searchQuery = '';
+                  _searchController.clear();
+                }
+              });
             },
           ),
         ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
+      body: StreamBuilder<List<ChatRoom>>(
         stream: _chatService.getChatRooms(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(
-              child: Text('Error: ${snapshot.error}'),
+              child: Text(l10n.errorLoadingMessages),
             );
           }
 
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (!snapshot.hasData) {
             return const Center(
               child: CircularProgressIndicator(),
             );
           }
 
-          final chats = snapshot.data?.docs.map((doc) => ChatRoom.fromFirestore(doc)).toList() ?? [];
-          
-          // ترتيب النتائج في الكود بدلاً من الـ query
-          chats.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
-
-          if (chats.isEmpty) {
+          final chatRooms = snapshot.data!;
+          if (chatRooms.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
                     Icons.chat_bubble_outline,
-                    size: 64,
-                    color: theme.textTheme.bodyLarge?.color?.withOpacity(0.5),
+                    size: 80,
+                    color: Colors.grey[400],
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'No chats yet',
+                    l10n.noMessages,
                     style: TextStyle(
                       fontSize: 18,
-                      color: theme.textTheme.bodyLarge?.color,
+                      color: Colors.grey[600],
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Start a conversation by searching for users',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: theme.textTheme.bodyLarge?.color?.withOpacity(0.6),
-                    ),
-                    textAlign: TextAlign.center,
                   ),
                 ],
               ),
             );
           }
 
+          final filteredRooms = _searchQuery.isEmpty
+              ? chatRooms
+              : chatRooms.where((room) {
+            final otherUser = room.getOtherUserId(_chatService.currentUserId);
+            return otherUser.toLowerCase().contains(_searchQuery.toLowerCase());
+          }).toList();
+
           return ListView.builder(
-            itemCount: chats.length,
+            itemCount: filteredRooms.length,
             itemBuilder: (context, index) {
-              final chatRoom = chats[index];
-              final currentUserId = _auth.currentUser?.uid ?? '';
-              final otherUserId = chatRoom.getOtherUserId(currentUserId);
-              final otherUserName = chatRoom.getOtherUserName(currentUserId);
-              final otherUserAvatar = chatRoom.getOtherUserAvatar(currentUserId);
-              
-              return ListTile(
-                leading: CircleAvatar(
-                  backgroundImage: otherUserAvatar.isNotEmpty
-                      ? NetworkImage(otherUserAvatar)
-                      : null,
-                  child: otherUserAvatar.isEmpty
-                      ? Text(otherUserName[0].toUpperCase())
-                      : null,
-                ),
-                title: Text(otherUserName),
-                subtitle: Text(
-                  _formatLastMessage(chatRoom.lastMessage, chatRoom.lastMessageType),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      _formatTime(chatRoom.lastMessageTime),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: theme.textTheme.bodyLarge?.color?.withOpacity(0.6),
-                      ),
-                    ),
-                    if ((chatRoom.unreadCount[currentUserId] ?? 0) > 0)
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: theme.primaryColor,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          (chatRoom.unreadCount[currentUserId] ?? 0).toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+              final chatRoom = filteredRooms[index];
+              return ChatRoomTile(
+                chatRoom: chatRoom,
+                currentUserId: _chatService.currentUserId,
                 onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => ChatPage(
+                      builder: (context) => ChatRoomPage(
                         chatRoomId: chatRoom.id,
-                        recipientId: otherUserId,
-                        recipientName: otherUserName,
-                        recipientAvatar: otherUserAvatar,
+                        recipientId: chatRoom.getOtherUserId(_chatService.currentUserId),
                       ),
                     ),
                   );
@@ -330,186 +144,280 @@ class _ChatListPageState extends State<ChatListPage> {
   }
 }
 
-class UserSearchSheet extends StatefulWidget {
-  const UserSearchSheet({super.key});
+class ChatRoomTile extends StatelessWidget {
+  final ChatRoom chatRoom;
+  final String currentUserId;
+  final VoidCallback onTap;
 
-  @override
-  State<UserSearchSheet> createState() => _UserSearchSheetState();
-}
+  const ChatRoomTile({
+    Key? key,
+    required this.chatRoom,
+    required this.currentUserId,
+    required this.onTap,
+  }) : super(key: key);
 
-class _UserSearchSheetState extends State<UserSearchSheet> {
-  final TextEditingController _searchController = TextEditingController();
-  String _searchQuery = '';
-  List<Map<String, dynamic>> _searchResults = [];
-  bool _isSearching = false;
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _searchUsers() async {
-    if (_searchQuery.isEmpty) {
-      setState(() {
-        _searchResults = [];
-        _isSearching = false;
-      });
-      return;
+  // ✅ دالة محسنة للحصول على User ID الصحيح
+  String _getCorrectUserId() {
+    // ابحث في participants عن المستخدم الآخر
+    for (String participantId in chatRoom.participants.keys) {
+      if (participantId != currentUserId &&
+          participantId.isNotEmpty &&
+          participantId != 'unknown') {
+        return participantId;
+      }
     }
 
-    setState(() => _isSearching = true);
-
-    try {
-      final query = await FirebaseFirestore.instance
-          .collection('users')
-          .where('displayName', isGreaterThanOrEqualTo: _searchQuery)
-          .where('displayName', isLessThanOrEqualTo: _searchQuery + '\uf8ff')
-          .limit(10)
-          .get();
-
-      setState(() {
-        _searchResults = query.docs
-            .map((doc) => {
-                  'uid': doc.id,
-                  ...doc.data(),
-                })
-            .toList();
-      });
-    } catch (e) {
-      print('Error searching users: $e');
-    } finally {
-      setState(() => _isSearching = false);
+    // إذا Chat Room ID يحتوي على underscore، قسمه
+    if (chatRoom.id.contains('_')) {
+      final parts = chatRoom.id.split('_');
+      if (parts.length == 2) {
+        return parts[0] == currentUserId ? parts[1] : parts[0];
+      }
     }
-  }
 
-  Future<void> _startChat(Map<String, dynamic> userData) async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) return;
-
-    try {
-      final chatService = ChatService();
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator()),
-      );
-
-      final String chatRoomId = await chatService.createOrGetChatRoom(
-        userData['uid'],
-        userData['displayName'] ?? 'User',
-        userData['photoURL'] ?? '',
-      );
-
-      if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
-
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ChatPage(
-            chatRoomId: chatRoomId,
-            recipientId: userData['uid'],
-            recipientName: userData['displayName'] ?? 'User',
-            recipientAvatar: userData['photoURL'] ?? '',
-          ),
-        ),
-      );
-
-      // Clear search after starting chat
-      setState(() {
-        _searchQuery = '';
-        _searchResults = [];
-        _searchController.clear();
-      });
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error starting chat')),
-      );
-    }
+    return 'unknown';
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context);
-    final currentUser = FirebaseAuth.instance.currentUser;
+    final otherUserId = _getCorrectUserId();
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              hintText: l10n?.searchUsersHint ?? 'Search by name...',
-              prefixIcon: const Icon(Icons.search),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              filled: true,
-              fillColor: theme.cardColor,
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        leading: CircleAvatar(
+          radius: 25,
+          backgroundColor: Colors.blue,
+          child: Text(
+            otherUserId != 'unknown' ? '👤' : '?',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
             ),
-            onChanged: (value) {
-              setState(() => _searchQuery = value);
-              _searchUsers();
-            },
           ),
         ),
-        if (_isSearching)
-          const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: CircularProgressIndicator(),
-          )
-        else if (_searchResults.isNotEmpty)
-          Expanded(
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: _searchResults.length,
-              itemBuilder: (context, index) {
-                final user = _searchResults[index];
-                if (user['uid'] == currentUser?.uid) return const SizedBox.shrink();
-                
-                // Fix the condition here - check if photoURL exists and is not empty
-                final photoUrl = user['photoURL']?.toString() ?? '';
-                final hasValidPhoto = photoUrl.isNotEmpty;
-                
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundImage: hasValidPhoto
-                        ? NetworkImage(photoUrl)
-                        : null,
-                    child: !hasValidPhoto
-                        ? Text(user['displayName']?[0].toUpperCase() ?? 'U')
-                        : null,
+        title: otherUserId != 'unknown'
+            ? FutureBuilder<String>(
+          future: getUserName(otherUserId),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Row(
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[400]!),
+                    ),
                   ),
-                  title: Text(user['displayName'] ?? 'User'),
-                  subtitle: Text(user['email'] ?? ''),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.message),
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _startChat(user);
-                    },
-                  ),
-                );
-              },
-            ),
-          )
-        else if (_searchQuery.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              l10n?.noUsersFound ?? 'No users found',
-              style: TextStyle(
-                color: theme.textTheme.bodyLarge?.color?.withOpacity(0.7),
+                  const SizedBox(width: 8),
+                  const Text('Loading...'),
+                ],
+              );
+            }
+
+            final userName = snapshot.data ?? 'Unknown User';
+
+            // ✅ تحقق محسن من صحة الاسم
+            if (userName.length > 30 ||
+                userName.startsWith('J') && userName.length > 20 ||
+                userName == 'User' ||
+                userName.contains('_')) {
+              return const Text(
+                'Unknown User',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
+              );
+            }
+
+            return Text(
+              userName,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
               ),
+            );
+          },
+        )
+            : const Text(
+          'Unknown User',
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+          ),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            chatRoom.lastMessage ?? AppLocalizations.of(context)!.noMessages,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 14,
             ),
           ),
-      ],
+        ),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              _formatTime(chatRoom.lastMessageTime),
+              style: TextStyle(
+                color: Colors.grey[500],
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 4),
+            // يمكن إضافة badge للرسائل غير المقروءة هنا
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: Colors.blue,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ],
+        ),
+        onTap: onTap,
+      ),
     );
+  }
+
+  String _formatTime(DateTime? dateTime) {
+    if (dateTime == null) return '';
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inDays > 0) {
+      if (difference.inDays == 1) {
+        return 'Yesterday';
+      } else if (difference.inDays < 7) {
+        return '${difference.inDays}d ago';
+      } else {
+        return DateFormat('MMM d').format(dateTime);
+      }
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inMinutes > 0) {
+      return '${difference.inMinutes}m ago';
+    } else {
+      return 'now';
+    }
+  }
+}
+
+// ✅ دالة محسنة ومُصححة لجلب اسم المستخدم
+Future<String> getUserName(String userId) async {
+  try {
+    print('🔍 Getting name for userId: $userId'); // للتشخيص
+
+    // تحقق من أن userId صالح
+    if (userId.isEmpty || userId == 'unknown' || userId.length > 50) {
+      print('❌ Invalid userId: $userId');
+      return 'Unknown User';
+    }
+
+    // أولاً: جلب من Firestore (أسرع وأوثق)
+    try {
+      final firestoreDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+
+      if (firestoreDoc.exists) {
+        final data = firestoreDoc.data()!;
+        print('📄 Firestore data for $userId: $data'); // للتشخيص
+
+        // جرب حقول مختلفة للاسم
+        final name = data['name'] as String? ??
+            data['displayName'] as String? ??
+            data['username'] as String?;
+
+        if (name != null && name.isNotEmpty && name != 'User' && name.length < 50) {
+          print('✅ Found name in Firestore: $name');
+          return name;
+        }
+
+        // إذا ما لقيناش اسم جيد، استخدم الإيميل
+        final email = data['email'] as String?;
+        if (email != null && email.isNotEmpty) {
+          final formattedName = _formatEmailAsDisplayName(email);
+          print('✅ Using email-based name: $formattedName');
+          return formattedName;
+        }
+      } else {
+        print('❌ No Firestore document for userId: $userId');
+      }
+    } catch (e) {
+      print('❌ Firestore error: $e');
+    }
+
+    // ثانياً: جرب Realtime Database
+    try {
+      final realtimeSnapshot = await FirebaseDatabase.instance
+          .ref('users/$userId/name')
+          .get();
+
+      if (realtimeSnapshot.exists) {
+        final name = realtimeSnapshot.value as String?;
+        if (name != null && name.isNotEmpty && name.length < 50) {
+          print('✅ Found name in Realtime DB: $name');
+          return name;
+        }
+      } else {
+        print('❌ No name in Realtime DB for userId: $userId');
+      }
+    } catch (e) {
+      print('❌ Realtime Database error: $e');
+    }
+
+    // آخر حل: اسم مبسط من userId
+    final fallbackName = 'User ${userId.substring(0, 6)}';
+    print('⚠️ Using fallback name: $fallbackName');
+    return fallbackName;
+
+  } catch (e) {
+    print('❌ General error getting user name for $userId: $e');
+    return 'Unknown User';
+  }
+}
+
+// ✅ تحويل الإيميل لاسم جميل للعرض
+String _formatEmailAsDisplayName(String email) {
+  try {
+    final username = email.split('@')[0];
+
+    // تنظيف الاسم
+    final cleanName = username
+        .replaceAll(RegExp(r'[._-]'), ' ')
+        .replaceAll(RegExp(r'\d+'), '') // إزالة الأرقام
+        .trim();
+
+    if (cleanName.isEmpty) {
+      return username; // إرجاع الاسم الأصلي إذا فشل التنظيف
+    }
+
+    // جعل أول حرف من كل كلمة كبير
+    final words = cleanName.split(' ')
+        .where((word) => word.isNotEmpty)
+        .map((word) => word[0].toUpperCase() + word.substring(1))
+        .toList();
+
+    return words.isNotEmpty ? words.join(' ') : username;
+
+  } catch (e) {
+    return email.split('@')[0]; // fallback آمن
   }
 }

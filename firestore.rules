@@ -1,7 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 🔐 products
+    // 🛍️ products
     match /products/{productId} {
       allow create: if request.auth != null;
       allow read: if true;
@@ -11,7 +11,17 @@ service cloud.firestore {
     // 🔐 users collection
     match /users/{userId} {
       allow create: if request.auth != null;
-      allow read, update, delete: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null; // Allow reading all users for search functionality
+      allow update, delete: if request.auth != null && request.auth.uid == userId;
+      
+      // إضافة قواعد التقييمات
+      match /ratings/{ratingId} {
+        allow read: if request.auth != null; // أي مستخدم مسجل يمكنه قراءة التقييمات
+        allow create: if request.auth != null 
+          && request.auth.uid != userId // لا يمكن للمستخدم تقييم نفسه
+          && !exists(/databases/$(database)/documents/users/$(userId)/ratings/$(request.auth.uid)); // لا يمكن تقييم نفس الشخص مرتين
+        allow update, delete: if request.auth != null && request.auth.uid == resource.data.ratedBy; // فقط من قام بالتقييم يمكنه تعديله أو حذفه
+      }
       
       match /orders/{orderId} {
         allow read, update, delete: if request.auth != null && request.auth.uid == userId;
@@ -34,21 +44,43 @@ service cloud.firestore {
     
     // 🔐 notifications
     match /notifications/{notifId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow read: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.uid;
     }
     
     // 🔐 chat_rooms collection
     match /chat_rooms/{chatId} {
-      allow read: if request.auth != null && request.auth.uid in resource.data.users;
-      allow create: if request.auth != null && request.auth.uid in request.resource.data.users;
-      allow update: if request.auth != null && request.auth.uid in resource.data.users;
-      allow delete: if request.auth != null && request.auth.uid in resource.data.users;
-
+      // قراءة المحادثة
+      allow read: if request.auth != null && request.auth.uid in resource.data.participants;
+      
+      // إنشاء محادثة جديدة
+      allow create: if request.auth != null && request.auth.uid in request.resource.data.participants;
+      
+      // تحديث المحادثة
+      allow update: if request.auth != null && request.auth.uid in resource.data.participants;
+      
+      // حذف المحادثة
+      allow delete: if request.auth != null && request.auth.uid in resource.data.participants;
+      
       // 🔐 messages subcollection
       match /messages/{messageId} {
-        allow read: if request.auth != null && request.auth.uid in get(/databases/$(database)/documents/chat_rooms/$(chatId)).data.users;
-        allow create: if request.auth != null && request.auth.uid in get(/databases/$(database)/documents/chat_rooms/$(chatId)).data.users;
-        allow update, delete: if request.auth != null && request.auth.uid in get(/databases/$(database)/documents/chat_rooms/$(chatId)).data.users;
+        // قراءة الرسائل
+        allow read: if request.auth != null && 
+          request.auth.uid in get(/databases/$(database)/documents/chat_rooms/$(chatId)).data.participants;
+        
+        // إنشاء رسالة جديدة
+        allow create: if request.auth != null && 
+          request.auth.uid in get(/databases/$(database)/documents/chat_rooms/$(chatId)).data.participants;
+        
+        // تحديث الرسالة
+        allow update: if request.auth != null && (
+          request.auth.uid == resource.data.senderId || // المرسل يمكنه تحديث رسالته
+          request.auth.uid in get(/databases/$(database)/documents/chat_rooms/$(chatId)).data.participants // المشاركون يمكنهم تحديث حالة القراءة
+        );
+        
+        // حذف الرسالة
+        allow delete: if request.auth != null && request.auth.uid == resource.data.senderId;
       }
     }
     
@@ -62,7 +94,8 @@ service cloud.firestore {
     match /posts/{postId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
-      allow update, delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
+      allow update: if request.auth != null; // السماح لأي مستخدم بتحديث المنشورات (للايك)
+      allow delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
       
       // Comments in posts
       match /comments/{commentId} {
@@ -77,7 +110,7 @@ service cloud.firestore {
       allow read, write: if request.auth != null;
     }
     
-    // 🔐 arts_products (if you have this collection)
+    // 🔐 arts_products
     match /arts_products/{productId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;

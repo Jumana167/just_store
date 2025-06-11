@@ -134,41 +134,31 @@ class _SettingsPageState extends State<SettingsPage> {
           ListTile(
             leading: const Icon(Icons.language, color: AppTheme.warning),
             title: Text(l10n.language),
-            subtitle: Text(languageProvider.isEnglish ? 'English' : 'العربية'),
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: Text(l10n.selectLanguage),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ListTile(
-                        title: const Text('English'),
-                        onTap: () {
-                          languageProvider.changeLanguage(const Locale('en'));
-                          Navigator.pop(context);
-                        },
-                      ),
-                      ListTile(
-                        title: const Text('العربية'),
-                        onTap: () {
-                          languageProvider.changeLanguage(const Locale('ar'));
-                          Navigator.pop(context);
-                        },
-                      ),
-                    ],
-                  ),
+            trailing: DropdownButton<String>(
+              value: languageProvider.currentLocale.languageCode,
+              items: [
+                DropdownMenuItem(
+                  value: 'en',
+                  child: Text(l10n.english),
                 ),
-              );
-            },
+                DropdownMenuItem(
+                  value: 'ar',
+                  child: Text(l10n.arabic),
+                ),
+              ],
+              onChanged: (String? value) {
+                if (value != null) {
+                  languageProvider.changeLanguage(Locale(value));
+                }
+              },
+            ),
           ),
           const Divider(color: AppTheme.borderGrey),
           _buildSettingsTile(
             Icons.description,
             l10n.termsConditions,
             AppTheme.info,
-            () {
+                () {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const TermsAndConditionsPage()),
@@ -203,12 +193,17 @@ class _SettingsPageState extends State<SettingsPage> {
               subject: 'Just Store App 🌟',
             );
           }),
-          _buildSettingsTile(Icons.info_outline, 'About', AppTheme.accentBlue, () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AboutAppPage()),
-            );
-          }),
+          _buildSettingsTile(
+            Icons.info_outline,
+            'About',
+            AppTheme.accentBlue,
+                () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AboutAppPage()),
+              );
+            },
+          ),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(

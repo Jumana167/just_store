@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'chat_page.dart';
 import '../services/chat_service.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'chat_room_page.dart';
 
 class BookDetailsPage extends StatefulWidget {
   final String productId;
@@ -282,11 +283,7 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                           );
 
                           // Create or get chat room ID
-                          final String chatRoomId = await chatService.createOrGetChatRoom(
-                            recipientId,
-                            recipientName,
-                            recipientAvatar,
-                          );
+                          final String chatRoomId = await chatService.createOrGetChatRoom(recipientId);
 
                           if (!context.mounted) return;
 
@@ -297,11 +294,9 @@ class _BookDetailsPageState extends State<BookDetailsPage> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ChatPage(
+                              builder: (_) => ChatRoomPage(
                                 chatRoomId: chatRoomId,
                                 recipientId: recipientId,
-                                recipientName: recipientName,
-                                recipientAvatar: recipientAvatar,
                               ),
                             ),
                           );

@@ -5,6 +5,7 @@ import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'chat_page.dart';
 import '../services/chat_service.dart';
 import 'app_theme.dart';
+import 'chat_room_page.dart';
 
 class ClothesDetailsPage extends StatelessWidget {
   final String image;
@@ -219,11 +220,7 @@ class ClothesDetailsPage extends StatelessWidget {
                           );
 
                           // Create or get chat room ID
-                          final String chatRoomId = await chatService.createOrGetChatRoom(
-                            recipientId,
-                            recipientName,
-                            recipientAvatar,
-                          );
+                          final String chatRoomId = await chatService.createOrGetChatRoom(recipientId);
 
                           if (!context.mounted) return;
 
@@ -234,11 +231,9 @@ class ClothesDetailsPage extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => ChatPage(
+                              builder: (_) => ChatRoomPage(
                                 chatRoomId: chatRoomId,
                                 recipientId: recipientId,
-                                recipientName: recipientName,
-                                recipientAvatar: recipientAvatar,
                               ),
                             ),
                           );

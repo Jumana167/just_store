@@ -2,13 +2,15 @@
 
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'app_theme.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'models/chat_message.dart';
+import 'services/chat_service.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 // تعريف نموذج Message للاستخدام الداخلي
 class Message {
@@ -29,21 +31,6 @@ class Message {
     required this.type,
     required this.isRead,
   });
-
-  factory Message.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    final timestamp = data['timestamp'] as Timestamp?;
-
-    return Message(
-      id: doc.id,
-      senderId: data['senderId'] ?? '',
-      text: data['text'] ?? '',
-      imageUrl: data['imageUrl'] ?? '',
-      timestamp: timestamp?.toDate() ?? DateTime.now(),
-      type: data['type'] ?? 'text',
-      isRead: data['isRead'] ?? false,
-    );
-  }
 }
 
 // صفحة المحادثة
@@ -70,6 +57,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   final FocusNode _textFieldFocus = FocusNode();
   final userId = FirebaseAuth.instance.currentUser!.uid;
+  final _chatService = ChatService();
 
   bool _isOnline = false;
   DateTime? _lastSeen;
@@ -107,93 +95,45 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   Future<void> _markMessagesAsRead() async {
-    final chatRoomRef = FirebaseFirestore.instance.collection('chat_rooms').doc(widget.chatRoomId);
-
-    await chatRoomRef.update({
-      'unreadCount.$userId': 0,
-    });
+    await _chatService.markMessagesAsRead(widget.chatRoomId);
   }
 
   void _updateOnlineStatus(bool isOnline) {
-    FirebaseFirestore.instance.collection('user_status').doc(userId).set({
-      'isOnline': isOnline,
-      'lastSeen': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    // حذف استخدام FirebaseDatabase هنا
   }
 
   void _listenToOnlineStatus() {
-    FirebaseFirestore.instance
-        .collection('user_status')
-        .doc(widget.recipientId)
-        .snapshots()
-        .listen((doc) {
-      if (doc.exists && mounted) {
-        final data = doc.data()!;
-        setState(() {
-          _isOnline = data['isOnline'] ?? false;
-          _lastSeen = (data['lastSeen'] as Timestamp?)?.toDate();
-        });
-      }
-    });
+    // حذف استخدام FirebaseDatabase هنا
   }
 
   void _listenToTyping() {
-    FirebaseFirestore.instance
-        .collection('chat_rooms')
-        .doc(widget.chatRoomId)
-        .snapshots()
-        .listen((doc) {
-      if (doc.exists && mounted) {
-        final data = doc.data()!;
-        final typingData = data['typing'] as Map<String, dynamic>? ?? {};
-        final otherUserTyping = typingData[widget.recipientId] ?? false;
-
-        if (_isTyping != otherUserTyping) {
-          setState(() {
-            _isTyping = otherUserTyping;
-          });
-        }
-      }
-    });
+    // حذف استخدام FirebaseDatabase هنا
   }
 
   void _updateTypingStatus(bool isTyping) {
-    FirebaseFirestore.instance.collection('chat_rooms').doc(widget.chatRoomId).update({
-      'typing.$userId': isTyping,
-    });
+    // حذف استخدام FirebaseDatabase هنا
   }
 
-  Future<void> _sendMessage({String? text, String? imageUrl, String type = 'text'}) async {
+  Future<void> _sendMessage({String? text, String? imageUrl}) async {
     final messageText = text ?? _messageController.text.trim();
     if (messageText.isEmpty && imageUrl == null) return;
 
     _messageController.clear();
     _updateTypingStatus(false);
 
-    final messageData = {
-      'senderId': userId,
-      'text': messageText,
-      'imageUrl': imageUrl ?? '',
-      'type': type,
-      'timestamp': FieldValue.serverTimestamp(),
-      'chatId': widget.chatRoomId,
-      'isRead': false,
-    };
-
-    // Add message to subcollection
-    await FirebaseFirestore.instance
-        .collection('chat_rooms')
-        .doc(widget.chatRoomId)
-        .collection('messages')
-        .add(messageData);
-
-    // Update chat room info
-    await FirebaseFirestore.instance.collection('chat_rooms').doc(widget.chatRoomId).update({
-      'lastMessage': type == 'text' ? messageText : '📷 Photo',
-      'lastMessageType': type,
-      'lastMessageTime': FieldValue.serverTimestamp(),
-      'unreadCount.${widget.recipientId}': FieldValue.increment(1),
-    });
+    if (imageUrl != null) {
+      await _chatService.sendImageMessage(
+        widget.chatRoomId,
+        imageUrl,
+        widget.recipientId,
+      );
+    } else {
+      await _chatService.sendTextMessage(
+        widget.chatRoomId,
+        messageText,
+        widget.recipientId,
+      );
+    }
 
     _scrollToBottom();
   }
@@ -205,35 +145,32 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
     if (pickedFile == null) return;
 
-      setState(() => _isLoadingImage = true);
+    setState(() => _isLoadingImage = true);
 
     try {
-      // Upload image to Firebase Storage
       final file = File(pickedFile.path);
-        final storageRef = FirebaseStorage.instance
-            .ref()
-            .child('chat_images')
-            .child(widget.chatRoomId)
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('chat_images')
+          .child(widget.chatRoomId)
           .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
 
       final uploadTask = await storageRef.putFile(file);
-        final imageUrl = await uploadTask.ref.getDownloadURL();
+      final imageUrl = await uploadTask.ref.getDownloadURL();
 
-      // Send message with image
-      await _sendMessage(imageUrl: imageUrl, type: 'image');
-
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.failedToSendImage)),
-          );
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isLoadingImage = false);
-        }
+      await _sendMessage(imageUrl: imageUrl);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.failedToSendImage)),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingImage = false);
       }
     }
+  }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -248,421 +185,185 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   }
 
   String _getOnlineStatus() {
-    final l10n = AppLocalizations.of(context)!;
     if (_isOnline) {
-      return l10n.online;
+      return 'Online';
     } else if (_lastSeen != null) {
-      final now = DateTime.now();
-      final difference = now.difference(_lastSeen!);
-
-      if (difference.inMinutes < 1) {
-        return l10n.justNow;
-      } else if (difference.inHours < 1) {
-        return l10n.minutesAgo(difference.inMinutes);
-      } else if (difference.inDays < 1) {
-        return l10n.hoursAgo(difference.inHours);
-      } else {
-        return DateFormat('MMM d').format(_lastSeen!);
-      }
+      return 'Last seen ${DateFormat.jm().format(_lastSeen!)}';
     }
-    return l10n.offline;
+    return 'Offline';
   }
 
-  Widget _buildMessage(Map<String, dynamic> msg, bool isMe) {
-    final time = (msg['timestamp'] as Timestamp?)?.toDate();
-    final formattedTime = time != null ? DateFormat.jm().format(time) : '';
-    final messageType = msg['type'] ?? 'text';
-
-    return Container(
-      margin: EdgeInsets.only(
-        left: isMe ? 50 : 10,
-        right: isMe ? 10 : 50,
-        top: 2,
-        bottom: 2,
-      ),
-      child: Column(
-        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: isMe ? AppTheme.primaryBlue : AppTheme.white,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(20),
-                topRight: const Radius.circular(20),
-                bottomLeft: Radius.circular(isMe ? 20 : 5),
-                bottomRight: Radius.circular(isMe ? 5 : 20),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.withOpacity(AppTheme.black, 0.1),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (messageType == 'image' && msg['imageUrl'] != null)
-                  GestureDetector(
-                    onTap: () {
-                      showDialog(
-                        context: context,
-                        builder: (_) => Dialog(
-                          backgroundColor: Colors.transparent,
-                          child: Stack(
-                            children: [
-                              Center(
-                                child: Image.network(
-                                  msg['imageUrl'],
-                                  fit: BoxFit.contain,
-                                ),
-                              ),
-                              Positioned(
-                                top: 40,
-                                right: 20,
-                                child: IconButton(
-                                  icon: const Icon(Icons.close, color: AppTheme.white, size: 30),
-                                  onPressed: () => Navigator.pop(context),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                    child: Container(
-                      constraints: const BoxConstraints(maxWidth: 200, maxHeight: 200),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.network(
-                          msg['imageUrl'],
-                          fit: BoxFit.cover,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Container(
-                              height: 100,
-                              width: 100,
-                              color: AppTheme.borderGrey,
-                              child: const Center(child: CircularProgressIndicator()),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              height: 100,
-                              width: 100,
-                              color: AppTheme.borderGrey,
-                              child: const Icon(Icons.error_outline, color: AppTheme.mediumGrey),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                if (msg['text'] != null && msg['text'].toString().isNotEmpty)
-                  Padding(
-                    padding: EdgeInsets.only(top: messageType == 'image' ? 8 : 0),
-                    child: SelectableText(
-                      msg['text'] ?? '',
-                      style: TextStyle(
-                        color: isMe ? AppTheme.white : AppTheme.darkGrey,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.only(
-              left: isMe ? 0 : 8,
-              right: isMe ? 8 : 0,
-              top: 4,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  formattedTime,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppTheme.mediumGrey,
-                  ),
-                ),
-                if (isMe) ...[
-                  const SizedBox(width: 4),
-                  Icon(
-                    msg['isRead'] == true ? Icons.done_all : Icons.done,
-                    size: 16,
-                    color: msg['isRead'] == true ? AppTheme.primaryBlue : AppTheme.mediumGrey,
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  // دالة لجلب اسم المستخدم من Realtime Database
+  Future<String> getUserName(String userId) async {
+    final snapshot = await FirebaseDatabase.instance.ref('users/$userId/name').get();
+    if (snapshot.exists) {
+      return snapshot.value as String;
+    }
+    return userId;
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: AppTheme.primaryBlue,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppTheme.white),
-          onPressed: () => Navigator.pop(context),
-        ),
         title: Row(
           children: [
-            Stack(
-          children: [
             CircleAvatar(
-                  radius: 20,
-              backgroundColor: AppTheme.borderGrey,
               backgroundImage: widget.recipientAvatar.isNotEmpty
                   ? NetworkImage(widget.recipientAvatar)
                   : null,
               child: widget.recipientAvatar.isEmpty
-                  ? Text(
-                    widget.recipientName.isNotEmpty
-                        ? widget.recipientName[0].toUpperCase()
-                        : '?',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primaryBlue,
-                ),
-              )
+                  ? Text(widget.recipientName.isNotEmpty ? widget.recipientName[0].toUpperCase() : '?')
                   : null,
             ),
-                if (_isOnline)
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: AppTheme.success,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppTheme.white, width: 2),
-                      ),
-                    ),
-                  ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FutureBuilder<String>(
+                  future: getUserName(widget.recipientId),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const SizedBox(width: 80, height: 16, child: LinearProgressIndicator());
+                    }
+                    return Text(snapshot.data ?? widget.recipientName);
+                  },
+                ),
+                Text(
+                  _getOnlineStatus(),
+                  style: const TextStyle(fontSize: 12),
+                ),
               ],
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.recipientName,
-                    style: const TextStyle(
-                      color: AppTheme.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  Text(
-                    _isTyping ? l10n.typing : _getOnlineStatus(),
-                    style: TextStyle(
-                      color: _isTyping ? AppTheme.success : Colors.white70,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.call, color: AppTheme.white),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(l10n.callFeatureComingSoon),
-                  backgroundColor: AppTheme.primaryBlue,
-                ),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: AppTheme.white),
-            onPressed: () {
-              // More options
-            },
-          ),
-        ],
       ),
-      backgroundColor: theme.scaffoldBackgroundColor,
       body: Column(
         children: [
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('chat_rooms')
-                  .doc(widget.chatRoomId)
-                  .collection('messages')
-                  .orderBy('timestamp', descending: true)
-                  .limit(50)
-                  .snapshots(),
+            child: StreamBuilder<List<ChatMessage>>(
+              stream: _chatService.getChatMessages(widget.chatRoomId),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryBlue),
-                    ),
-                  );
-                }
-
                 if (snapshot.hasError) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.error_outline, size: 64, color: AppTheme.error),
-                        const SizedBox(height: 16),
-                        Text(
-                          '${l10n.error}: ${snapshot.error}',
-                          style: const TextStyle(color: AppTheme.error),
-                        ),
-                      ],
-                    ),
-                  );
+                  return Center(child: Text(l10n.errorLoadingMessages));
                 }
 
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.chat_bubble_outline,
-                          size: 64,
-                          color: AppTheme.mediumGrey.withOpacity(0.7),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          l10n.noMessagesYet,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            color: AppTheme.mediumGrey,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          l10n.sendMessageToStart,
-                          style: TextStyle(
-                            color: AppTheme.mediumGrey.withOpacity(0.8),
-                            fontSize: 14,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  );
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
                 }
 
-                final messages = snapshot.data!.docs;
-
+                final messages = snapshot.data!;
                 return ListView.builder(
-                  controller: _scrollController,
                   reverse: true,
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(8),
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
-                    final msg = messages[index].data() as Map<String, dynamic>;
-                    final isMe = msg['senderId'] == userId;
+                    final message = messages[index];
+                    final isMe = message.senderId == userId;
 
-                    return _buildMessage(msg, isMe);
+                    return Align(
+                      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isMe ? AppTheme.primaryBlue : Colors.grey[300],
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (message.imageUrl != null && message.imageUrl!.isNotEmpty)
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  message.imageUrl!,
+                                  width: 200,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            if (message.text.isNotEmpty)
+                              Text(
+                                message.text,
+                                style: TextStyle(
+                                  color: isMe ? Colors.white : Colors.black,
+                                ),
+                              ),
+                            Text(
+                              DateFormat.jm().format(message.timestamp),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isMe ? Colors.white70 : Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
                   },
                 );
               },
             ),
           ),
+          if (_isTyping)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                '${widget.recipientName} is typing...',
+                style: const TextStyle(
+                  color: Colors.grey,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ),
           Container(
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        boxShadow: [
-          BoxShadow(
-            offset: const Offset(0, -2),
-            blurRadius: 4,
-            color: AppTheme.withOpacity(AppTheme.black, 0.1),
-          ),
-        ],
-      ),
-      child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Row(
-          children: [
-            IconButton(
-                      icon: const Icon(Icons.photo, color: AppTheme.primaryBlue),
-                      onPressed: _isLoadingImage ? null : _sendImage,
-            ),
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface,
-                  borderRadius: BorderRadius.circular(24),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.2),
+                  spreadRadius: 1,
+                  blurRadius: 3,
+                  offset: const Offset(0, -1),
                 ),
-                child: TextField(
-                  controller: _messageController,
-                          focusNode: _textFieldFocus,
-                          maxLines: null,
-                          textInputAction: TextInputAction.newline,
-                  decoration: InputDecoration(
-                    hintText: l10n.typeAMessage,
-                    hintStyle: const TextStyle(color: AppTheme.mediumGrey),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 10,
-                            ),
-                    border: InputBorder.none,
-                          ),
-                          onChanged: (text) {
-                            final isCurrentlyTyping = text.isNotEmpty;
-                            if (isCurrentlyTyping != _isTyping) {
-                              _updateTypingStatus(isCurrentlyTyping);
-                            }
-                          },
-                          onSubmitted: (_) => _sendMessage(),
-                ),
-              ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: const BoxDecoration(
-                gradient: AppTheme.primaryGradient,
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: _isLoadingImage
-                    ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppTheme.white,
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.photo),
+                  onPressed: _isLoadingImage ? null : _sendImage,
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    focusNode: _textFieldFocus,
+                    decoration: InputDecoration(
+                      hintText: l10n.typeMessage,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey[200],
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                    ),
+                    onChanged: (text) {
+                      _updateTypingStatus(text.isNotEmpty);
+                    },
                   ),
-                )
-                    : const Icon(Icons.send),
-                color: theme.primaryColor,
-                        onPressed: _isLoadingImage ? null : () => _sendMessage(),
-              ),
-            ),
-          ],
-        ),
-              ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.send),
+                  onPressed: () => _sendMessage(),
+                ),
+              ],
             ),
           ),
         ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'theme_provider.dart';
 import 'app_theme.dart';
+import 'success_page.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   const ResetPasswordScreen({super.key});
@@ -20,10 +21,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     setState(() => _submitted = true);
 
     if (_formKey.currentState!.validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("✅ Password reset successfully")),
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const SuccessPage()),
       );
-      Navigator.pop(context);
     }
   }
 

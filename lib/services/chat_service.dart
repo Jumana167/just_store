@@ -1,242 +1,178 @@
-// lib/services/chat_service.dart (استبدل الملف القديم بهذا)
+// lib/services/chat_service.dart
 
 import 'dart:io';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:just_store_clean/models/chat_room.dart';
+import 'package:just_store_clean/models/chat_message.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class ChatService {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseDatabase _database = FirebaseDatabase.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
   // الحصول على معرف المستخدم الحالي
-  String? get currentUserId => _auth.currentUser?.uid;
+  String get currentUserId => _auth.currentUser?.uid ?? '';
 
-  // إنشاء معرف غرفة محادثة من معرفات المستخدمين
-  String getChatRoomId(String uid1, String uid2) {
-    return uid1.compareTo(uid2) < 0 ? '${uid1}_$uid2' : '${uid2}_$uid1';
-  }
+  // إنشاء أو الحصول على غرفة دردشة
+  Future<String> createOrGetChatRoom(String otherUserId) async {
+    final chatRoomId = _getChatRoomId(currentUserId, otherUserId);
+    final chatRoomRef = _database.ref().child('chats/$chatRoomId');
 
-  // تحديث حالة الاتصال
-  Future<void> updateOnlineStatus(bool isOnline) async {
-    if (currentUserId == null) return;
-
-    await _firestore.collection('users').doc(currentUserId).update({
-      'isOnline': isOnline,
-      'lastSeen': FieldValue.serverTimestamp(),
-    });
-  }
-
-  // إنشاء أو الحصول على غرفة محادثة
-  Future<String> createOrGetChatRoom(String recipientId, String recipientName, String recipientAvatar) async {
-    if (currentUserId == null) throw Exception('User not logged in');
-
-    final currentUser = _auth.currentUser!;
-    final currentUserName = currentUser.displayName ?? 'User';
-    final currentUserAvatar = currentUser.photoURL ?? '';
-
-    final chatRoomId = getChatRoomId(currentUserId!, recipientId);
-    final chatRoomDoc = await _firestore.collection('chat_rooms').doc(chatRoomId).get();
-
-    if (!chatRoomDoc.exists) {
-      await _firestore.collection('chat_rooms').doc(chatRoomId).set({
-        'users': [currentUserId, recipientId],
-        'participants': [currentUserId, recipientId],
-        'userNames': {
-          currentUserId!: currentUserName,
-          recipientId: recipientName,
+    // التحقق من وجود الغرفة
+    final snapshot = await chatRoomRef.get();
+    if (!snapshot.exists) {
+      // إنشاء غرفة جديدة
+      final newChatRoom = ChatRoom(
+        id: chatRoomId,
+        participants: {
+          currentUserId: true,
+          otherUserId: true,
         },
-        'userAvatars': {
-          currentUserId!: currentUserAvatar,
-          recipientId: recipientAvatar,
-        },
-        'createdAt': FieldValue.serverTimestamp(),
-        'lastMessage': '',
-        'lastMessageTime': FieldValue.serverTimestamp(),
-        'lastMessageType': 'text',
-        'typing': {
-          currentUserId!: false,
-          recipientId: false,
-        },
-        'unreadCount': {
-          currentUserId!: 0,
-          recipientId: 0,
-        },
-      });
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      await chatRoomRef.set(newChatRoom.toMap());
     }
-
     return chatRoomId;
   }
 
-  // الحصول على قائمة المحادثات - ✅ مصححة للتعامل مع كلا البنيتين
-  Stream<QuerySnapshot> getChatRooms() {
-    if (currentUserId == null) throw Exception('User not logged in');
+  // الحصول على قائمة غرف الدردشة
+  Stream<List<ChatRoom>> getChatRooms() {
+    final chatRoomsRef = _database.ref().child('chats');
+    return chatRoomsRef.onValue.map((event) {
+      if (event.snapshot.value == null) return [];
 
-    return _firestore
-        .collection('chat_rooms')
-        .where('users', arrayContains: currentUserId)
-        .snapshots(); // ✅ إزالة orderBy - سيتم الترتيب في الكود
+      final Map<dynamic, dynamic> data = event.snapshot.value as Map<dynamic, dynamic>;
+      return data.entries
+          .where((entry) {
+            final participants = Map<String, bool>.from(entry.value['participants'] ?? {});
+            return participants.containsKey(currentUserId);
+          })
+          .map((entry) => ChatRoom.fromMap(entry.value, entry.key))
+          .toList()
+        ..sort((a, b) => (b.lastMessageTime ?? DateTime(0))
+            .compareTo(a.lastMessageTime ?? DateTime(0)));
+    });
   }
 
-  // الحصول على رسائل محادثة
-  Stream<QuerySnapshot> getChatMessages(String chatRoomId) {
-    return _firestore
-        .collection('chat_rooms')
-        .doc(chatRoomId)
-        .collection('messages')
-        .orderBy('timestamp', descending: true)
-        .limit(50)
-        .snapshots();
-  }
+  // الحصول على رسائل غرفة الدردشة
+  Stream<List<ChatMessage>> getChatMessages(String chatRoomId) {
+    final messagesRef = _database.ref().child('chats/$chatRoomId/messages');
+    return messagesRef.onValue.map((event) {
+      if (event.snapshot.value == null) return [];
 
-  // البحث عن المستخدمين - الدالة المفقودة
-  Future<QuerySnapshot> searchUsers(String query) async {
-    if (query.trim().isEmpty) {
-      return await _firestore.collection('users').limit(1).get();
-    }
-
-    return await _firestore
-        .collection('users')
-        .where('displayName', isGreaterThanOrEqualTo: query)
-        .where('displayName', isLessThanOrEqualTo: query + '\uf8ff')
-        .limit(20)
-        .get();
-  }
-
-  // تحديث حالة الكتابة
-  Future<void> updateTypingStatus(String chatRoomId, bool isTyping) async {
-    if (currentUserId == null) return;
-
-    await _firestore.collection('chat_rooms').doc(chatRoomId).update({
-      'typing.$currentUserId': isTyping,
+      final Map<dynamic, dynamic> data = event.snapshot.value as Map<dynamic, dynamic>;
+      return data.entries
+          .map((entry) => ChatMessage.fromMap(entry.value, entry.key))
+          .toList()
+        ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
     });
   }
 
   // إرسال رسالة نصية
   Future<void> sendTextMessage(String chatRoomId, String text, String recipientId) async {
-    if (currentUserId == null) throw Exception('User not logged in');
-    if (text.trim().isEmpty) return;
+    final messageRef = _database.ref().child('chats/$chatRoomId/messages').push();
+    final message = ChatMessage(
+      id: messageRef.key!,
+      senderId: currentUserId,
+      recipientId: recipientId,
+      text: text,
+      timestamp: DateTime.now(),
+    );
 
-    final timestamp = FieldValue.serverTimestamp();
+    await messageRef.set(message.toMap());
 
-    await _firestore
-        .collection('chat_rooms')
-        .doc(chatRoomId)
-        .collection('messages')
-        .add({
-      'senderId': currentUserId,
+    // تحديث آخر رسالة في الغرفة
+    await _database.ref().child('chats/$chatRoomId/lastMessage').set({
       'text': text,
-      'imageUrl': '',
-      'timestamp': timestamp,
-      'type': 'text',
-      'isRead': false,
+      'senderId': currentUserId,
+      'timestamp': message.timestamp.millisecondsSinceEpoch,
     });
 
-    await _firestore.collection('chat_rooms').doc(chatRoomId).update({
-      'lastMessage': text,
-      'lastMessageTime': timestamp,
-      'lastMessageType': 'text',
-      'unreadCount.$recipientId': FieldValue.increment(1),
-    });
+    await _database.ref().child('chats/$chatRoomId/updatedAt').set(
+      message.timestamp.millisecondsSinceEpoch,
+    );
   }
 
-  // إرسال صورة
-  Future<void> sendImageMessage(String chatRoomId, File imageFile, String recipientId) async {
-    if (currentUserId == null) throw Exception('User not logged in');
-
-    final timestamp = FieldValue.serverTimestamp();
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
-    final storageRef = _storage
-        .ref()
-        .child('chat_images')
-        .child(chatRoomId)
-        .child(fileName);
-
-    final uploadTask = await storageRef.putFile(imageFile);
+  // إرسال رسالة مع صورة
+  Future<void> sendImageMessage(
+    String chatRoomId,
+    String imagePath,
+    String recipientId,
+  ) async {
+    // رفع الصورة
+    final storageRef = _storage.ref().child('chat_images/${DateTime.now().millisecondsSinceEpoch}');
+    final uploadTask = await storageRef.putFile(File(imagePath));
     final imageUrl = await uploadTask.ref.getDownloadURL();
 
-    await _firestore
-        .collection('chat_rooms')
-        .doc(chatRoomId)
-        .collection('messages')
-        .add({
+    // إرسال الرسالة
+    final messageRef = _database.ref().child('chats/$chatRoomId/messages').push();
+    final message = ChatMessage(
+      id: messageRef.key!,
+      senderId: currentUserId,
+      recipientId: recipientId,
+      text: 'صورة',
+      imageUrl: imageUrl,
+      timestamp: DateTime.now(),
+    );
+
+    await messageRef.set(message.toMap());
+
+    // تحديث آخر رسالة في الغرفة
+    await _database.ref().child('chats/$chatRoomId/lastMessage').set({
+      'text': 'صورة',
       'senderId': currentUserId,
-      'text': '',
-      'imageUrl': imageUrl,
-      'timestamp': timestamp,
-      'type': 'image',
-      'isRead': false,
+      'timestamp': message.timestamp.millisecondsSinceEpoch,
     });
 
-    await _firestore.collection('chat_rooms').doc(chatRoomId).update({
-      'lastMessage': '📷 Photo',
-      'lastMessageTime': timestamp,
-      'lastMessageType': 'image',
-      'unreadCount.$recipientId': FieldValue.increment(1),
-    });
+    await _database.ref().child('chats/$chatRoomId/updatedAt').set(
+      message.timestamp.millisecondsSinceEpoch,
+    );
   }
 
-  // تعليم الرسائل كمقروءة
+  // تحديث حالة القراءة
   Future<void> markMessagesAsRead(String chatRoomId) async {
-    if (currentUserId == null) return;
+    final messagesRef = _database.ref().child('chats/$chatRoomId/messages');
+    final snapshot = await messagesRef.get();
+    if (!snapshot.exists) return;
 
-    await _firestore.collection('chat_rooms').doc(chatRoomId).update({
-      'unreadCount.$currentUserId': 0,
+    final Map<dynamic, dynamic> data = snapshot.value as Map<dynamic, dynamic>;
+    final updates = <String, dynamic>{};
+
+    data.forEach((key, value) {
+      if (value['recipientId'] == currentUserId && !value['isRead']) {
+        updates['$key/isRead'] = true;
+      }
     });
 
-    final unreadMessages = await _firestore
-        .collection('chat_rooms')
-        .doc(chatRoomId)
-        .collection('messages')
-        .where('senderId', isNotEqualTo: currentUserId)
-        .where('isRead', isEqualTo: false)
-        .get();
-
-    final batch = _firestore.batch();
-    for (final doc in unreadMessages.docs) {
-      batch.update(doc.reference, {'isRead': true});
+    if (updates.isNotEmpty) {
+      await messagesRef.update(updates);
     }
-    await batch.commit();
   }
 
-  // حذف رسالة
-  Future<void> deleteMessage(String chatRoomId, String messageId) async {
-    if (currentUserId == null) return;
-
-    await _firestore
-        .collection('chat_rooms')
-        .doc(chatRoomId)
-        .collection('messages')
-        .doc(messageId)
-        .delete();
-  }
-
-  // حذف محادثة كاملة
+  // حذف غرفة الدردشة
   Future<void> deleteChatRoom(String chatRoomId) async {
-    if (currentUserId == null) return;
-
-    final messages = await _firestore
-        .collection('chat_rooms')
-        .doc(chatRoomId)
-        .collection('messages')
-        .get();
-
-    final batch = _firestore.batch();
-    for (final doc in messages.docs) {
-      batch.delete(doc.reference);
+    final chatRoomRef = _database.ref().child('chats/$chatRoomId');
+    final snapshot = await chatRoomRef.get();
+    
+    if (!snapshot.exists) return;
+    
+    final data = snapshot.value as Map<dynamic, dynamic>;
+    final participants = Map<String, bool>.from(data['participants'] ?? {});
+    
+    if (!participants.containsKey(currentUserId)) {
+      throw Exception('You are not a participant in this chat room');
     }
-    batch.delete(_firestore.collection('chat_rooms').doc(chatRoomId));
-    await batch.commit();
+
+    await chatRoomRef.remove();
   }
 
-  // الحصول على حالة الكتابة
-  Stream<DocumentSnapshot> getTypingStatus(String chatRoomId) {
-    return _firestore.collection('chat_rooms').doc(chatRoomId).snapshots();
-  }
-
-  // الحصول على حالة الاتصال للمستخدم
-  Stream<DocumentSnapshot> getUserOnlineStatus(String userId) {
-    return _firestore.collection('users').doc(userId).snapshots();
+  // مساعدة: إنشاء معرف فريد لغرفة الدردشة
+  String _getChatRoomId(String userId1, String userId2) {
+    final users = [userId1, userId2];
+    users.sort();
+    return users.join('_');
   }
 }
