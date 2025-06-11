@@ -23,7 +23,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     if (_formKey.currentState!.validate()) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const SuccessPage()),
+        MaterialPageRoute(
+          builder: (_) => SuccessPage(
+            postId: 'password_reset', // Special identifier for password reset
+          ),
+        ),
       );
     }
   }

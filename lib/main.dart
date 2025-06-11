@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
@@ -14,7 +15,7 @@ import 'providers/language_provider.dart';
 import 'splash_screen.dart';
 import 'verify_code_page.dart';
 import 'home_page.dart';
-import 'success_page.dart'; // 📝 إضافة صفحة النجاح
+import 'success_page.dart';
 import 'firebase_options.dart';
 import 'services/notification_service.dart';
 import 'auth_service.dart';
@@ -23,10 +24,41 @@ import 'auth_service.dart';
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 FlutterLocalNotificationsPlugin();
 
-// 📥 Background message handler
+// 📥 Background message handler - هذا يشتغل لما التطبيق مقفول
+@pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   debugPrint('📥 [Background] Message received: ${message.messageId}');
+  debugPrint('📥 [Background] Title: ${message.notification?.title}');
+  debugPrint('📥 [Background] Body: ${message.notification?.body}');
+
+  // احفظ النوتيفيكيشن في Firestore حتى لو التطبيق مقفول
+  try {
+    await _saveNotificationToFirestore(message);
+  } catch (e) {
+    debugPrint('❌ Error saving background notification: $e');
+  }
+}
+
+// دالة لحفظ النوتيفيكيشن في Firestore
+Future<void> _saveNotificationToFirestore(RemoteMessage message) async {
+  final data = message.data;
+  final notification = message.notification;
+
+  if (data['recipientUid'] != null) {
+    await FirebaseFirestore.instance.collection('notifications').add({
+      'uid': data['recipientUid'],
+      'message': notification?.title ?? data['message'] ?? 'New notification',
+      'body': notification?.body ?? data['body'] ?? '',
+      'senderName': data['senderName'] ?? 'Unknown',
+      'senderImageUrl': data['senderImageUrl'] ?? '',
+      'postId': data['postId'],
+      'type': data['type'] ?? 'general',
+      'isRead': false,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+    debugPrint('✅ Notification saved to Firestore');
+  }
 }
 
 Future<void> main() async {
@@ -41,32 +73,69 @@ Future<void> main() async {
 
     // 🔔 Local Notification Initialization
     const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const initSettings = InitializationSettings(android: androidInit);
-    await flutterLocalNotificationsPlugin.initialize(initSettings);
+    const iosInit = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+    );
+    const initSettings = InitializationSettings(
+      android: androidInit,
+      iOS: iosInit,
+    );
 
-    // 📥 FCM Setup
+    await flutterLocalNotificationsPlugin.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        debugPrint('📱 Local notification tapped: ${response.payload}');
+        // يمكنك إضافة navigation هنا
+      },
+    );
+
+    // إنشاء قناة الإشعارات للأندرويد
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      'high_importance_channel',
+      'High Importance Notifications',
+      description: 'This channel is used for important notifications.',
+      importance: Importance.high,
+      playSound: true,
+      enableVibration: true,
+      showBadge: true,
+      enableLights: true,
+    );
+
+    // إنشاء القناة
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
+
+    // 📥 FCM Background Handler
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+    // 🚨 Request Notification Permissions مع تفاصيل أكثر
     FirebaseMessaging messaging = FirebaseMessaging.instance;
+    NotificationSettings settings = await messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      carPlay: false,
+      criticalAlert: false,
+      provisional: false,
+    );
 
-    // 🚨 Request Notification Permissions
-    await messaging.requestPermission();
+    debugPrint('🔔 Permission status: ${settings.authorizationStatus}');
 
-    // 🔑 Print FCM Token
-    final String? fcmToken = await messaging.getToken();
-    if (fcmToken != null) {
-      debugPrint('FCM Token: $fcmToken');
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      debugPrint('✅ User granted notification permissions');
+    } else if (settings.authorizationStatus == AuthorizationStatus.provisional) {
+      debugPrint('⚠️ User granted provisional notification permissions');
+    } else {
+      debugPrint('❌ User declined notification permissions');
     }
 
-    // 📲 Foreground Message Handling
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      final notification = message.notification;
-      if (notification != null) {
-        NotificationService.showNotification(
-          title: notification.title ?? 'No title',
-          body: notification.body ?? 'No message body',
-        );
-      }
-    });
+    // 🔑 Get and Save FCM Token
+    await _setupFCMToken();
+
   } catch (e) {
     debugPrint('❌ Firebase initialization error: $e');
   }
@@ -83,6 +152,49 @@ Future<void> main() async {
   );
 }
 
+// دالة لإعداد FCM Token
+Future<void> _setupFCMToken() async {
+  try {
+    final String? fcmToken = await FirebaseMessaging.instance.getToken();
+    if (fcmToken != null) {
+      debugPrint('🔑 FCM Token: $fcmToken');
+      
+      // احفظ الـ token في Firestore للمستخدم الحالي
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({
+          'fcmToken': fcmToken,
+          'lastTokenUpdate': FieldValue.serverTimestamp(),
+        });
+        debugPrint('✅ FCM Token saved for user: ${user.uid}');
+      }
+    }
+
+    // استمع لتغيير الـ token
+    FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+      debugPrint('🔄 FCM Token refreshed: $newToken');
+      // احفظ الـ token الجديد في Firestore
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({
+          'fcmToken': newToken,
+          'lastTokenUpdate': FieldValue.serverTimestamp(),
+        });
+        debugPrint('✅ New FCM Token saved for user: ${user.uid}');
+      }
+    });
+
+  } catch (e) {
+    debugPrint('❌ Error getting FCM token: $e');
+  }
+}
+
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
@@ -97,21 +209,105 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     _setupAuthListener();
+    _setupFCMListeners();
   }
 
   // ✅ إعداد AuthStateListener لحفظ بيانات المستخدمين تلقائياً
   void _setupAuthListener() {
-    FirebaseAuth.instance.authStateChanges().listen((User? user) {
+    FirebaseAuth.instance.authStateChanges().listen((User? user) async {
       if (user != null) {
         debugPrint('👤 User logged in: ${user.email}');
-        // حفظ/تحديث بيانات المستخدم عند تسجيل الدخول
-        _authService.saveUserToFirestore(user).catchError((error) {
+
+        // حفظ/تحديث بيانات المستخدم + FCM Token
+        try {
+          await _authService.saveUserToFirestore(user);
+
+          // احفظ FCM Token للمستخدم الحالي
+          final fcmToken = await FirebaseMessaging.instance.getToken();
+          if (fcmToken != null) {
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .update({
+              'fcmToken': fcmToken,
+              'lastTokenUpdate': FieldValue.serverTimestamp(),
+            });
+            debugPrint('✅ FCM Token saved for user: ${user.uid}');
+          }
+
+        } catch (error) {
           debugPrint('❌ Error saving user data: $error');
-        });
+        }
       } else {
         debugPrint('👤 User logged out');
       }
     });
+  }
+
+  // 🔔 إعداد FCM Listeners
+  void _setupFCMListeners() {
+    // معالجة الإشعارات في الواجهة الأمامية
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      debugPrint('📱 [Foreground] Message received: ${message.messageId}');
+      debugPrint('📱 [Foreground] Title: ${message.notification?.title}');
+      debugPrint('📱 [Foreground] Body: ${message.notification?.body}');
+
+      // عرض الإشعار محلياً
+      _showLocalNotification(message);
+
+      // حفظ الإشعار في Firestore
+      _saveNotificationToFirestore(message);
+    });
+
+    // معالجة النقر على الإشعار
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      debugPrint('👆 Notification clicked: ${message.messageId}');
+      // يمكنك إضافة navigation هنا
+    });
+
+    // فحص الرسايل اللي جات وقت التطبيق مقفول
+    FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
+      if (message != null) {
+        debugPrint('📱 [Initial] App opened from notification: ${message.messageId}');
+        // Handle navigation
+      }
+    });
+  }
+
+  // دالة لعرض الإشعار محلياً
+  Future<void> _showLocalNotification(RemoteMessage message) async {
+    final notification = message.notification;
+    final android = message.notification?.android;
+
+    if (notification != null) {
+      await flutterLocalNotificationsPlugin.show(
+        notification.hashCode,
+        notification.title,
+        notification.body,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            'high_importance_channel',
+            'High Importance Notifications',
+            channelDescription: 'This channel is used for important notifications.',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: android?.smallIcon ?? '@mipmap/ic_launcher',
+            color: const Color(0xFF2196F3), // لون الإشعار
+            playSound: true,
+            enableVibration: true,
+            enableLights: true,
+            showWhen: true,
+            visibility: NotificationVisibility.public,
+          ),
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        payload: message.data['postId'],
+      );
+    }
   }
 
   @override
@@ -149,8 +345,6 @@ class _MyAppState extends State<MyApp> {
 
           routes: {
             '/home': (context) => const HomePage(),
-            '/verify': (context) => const VerifyCodePage(email: 'test@example.com'),
-            '/success': (context) => const SuccessPage(), // 🎉 إضافة صفحة النجاح
           },
 
           localizationsDelegates: const [

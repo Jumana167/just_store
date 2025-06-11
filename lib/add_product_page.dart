@@ -239,25 +239,29 @@ class _AddProductPageState extends State<AddProductPage> {
           'phone': _phoneCtrl.text,
         };
         
-        await FirebaseFirestore.instance.collection('posts').add(newPostData);
-      }
+        final docRef = await FirebaseFirestore.instance.collection('posts').add(newPostData);
 
-      if (mounted) {
-        Navigator.pop(context); // Close loading
-        
-        if (isEditing) {
-          Navigator.pop(context); // Return to details page
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(l10n.productUpdated),
-              backgroundColor: Colors.green,
-            ),
-          );
-        } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const SuccessPage()),
-          );
+        if (mounted) {
+          Navigator.pop(context); // Close loading
+          
+          if (isEditing) {
+            Navigator.pop(context); // Return to details page
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(l10n.productUpdated),
+                backgroundColor: Colors.green,
+              ),
+            );
+          } else {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => SuccessPage(
+                  postId: docRef.id, // Pass the document ID as postId
+                ),
+              ),
+            );
+          }
         }
       }
     } catch (e) {

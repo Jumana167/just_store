@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
 import 'home_page.dart';
+import 'post_details_page.dart';
 import 'dart:math' as math;
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SuccessPage extends StatefulWidget {
-  const SuccessPage({super.key});
+  final String postId;
+  
+  const SuccessPage({
+    super.key,
+    required this.postId,
+  });
 
   @override
   State<SuccessPage> createState() => _SuccessPageState();
@@ -285,9 +292,23 @@ class _SuccessPageState extends State<SuccessPage>
             // Secondary button - using theme
             AppWidgets.buildSecondaryButton(
               text: "View Product",
-              onPressed: () {
-                // Navigate to product view
-                Navigator.of(context).pop();
+              onPressed: () async {
+                // Fetch post data before navigation
+                final doc = await FirebaseFirestore.instance
+                    .collection('posts')
+                    .doc(widget.postId)
+                    .get();
+                
+                if (doc.exists && mounted) {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => PostDetailsPage(
+                        postId: widget.postId,
+                        postData: doc.data()!,
+                      ),
+                    ),
+                  );
+                }
               },
               width: double.infinity,
               icon: Icons.visibility,

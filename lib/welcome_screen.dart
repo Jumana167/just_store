@@ -140,7 +140,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
+    // ✅ إضافة null check آمن
+    final l10n = AppLocalizations.of(context);
+    if (l10n == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
@@ -347,7 +354,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                             ),
                           ),
                           child: Text(
-                            l10n.welcomeTagline,
+                            // ✅ تحقق آمن من وجود القيمة
+                            l10n.welcomeTagline ?? "Buy. Sell. Connect.",
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               fontSize: 16,
@@ -386,7 +394,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   // Login button
                   Center(
                     child: _buildEnhancedButton(
-                      text: l10n.login,
+                      text: l10n.login ?? "Login", // ✅ قيمة افتراضية
                       onPressed: () {
                         Navigator.push(
                           context,
@@ -403,7 +411,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                   // Sign up button
                   Center(
                     child: _buildEnhancedButton(
-                      text: l10n.signUp,
+                      text: l10n.signUp ?? "Sign Up", // ✅ قيمة افتراضية
                       onPressed: () {
                         Navigator.push(
                           context,

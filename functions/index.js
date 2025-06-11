@@ -177,22 +177,170 @@ exports.onProductLikeAdded = functions.firestore
     }
   });
 
-// 🔔 إشعار عند إضافة كومنت على منتج - تم تعطيلها لمنع التكرار
+// 🔔 إشعار عند إضافة كومنت على منتج
 exports.onProductCommentAdded = functions.firestore
   .document('products/{productId}/comments/{commentId}')
   .onCreate(async (snap, context) => {
-    // تم تعطيل هذه الدالة لمنع تكرار الإشعارات
-    // الإشعارات تتم من خلال التطبيق مباشرة
-    console.log('🚫 Product comment notification blocked to prevent duplicates');
-    return;
+    try {
+      const commentData = snap.data();
+      const { userId: commenterId, text } = commentData;
+      const productId = context.params.productId;
+      
+      console.log('Comment added for product:', productId, 'by user:', commenterId);
+      
+      // جلب بيانات المنتج
+      const productDoc = await db.collection('products').doc(productId).get();
+      if (!productDoc.exists) {
+        console.log('Product not found:', productId);
+        return;
+      }
+      
+      const product = productDoc.data();
+      const productOwnerId = product.createdBy;
+      
+      // ماتبعتش إشعار للشخص نفسه
+      if (commenterId === productOwnerId) {
+        console.log('User commented on their own product, skipping notification');
+        return;
+      }
+      
+      // جلب بيانات الشخص اللي علق
+      const commenterDoc = await db.collection('users').doc(commenterId).get();
+      const commenterName = commenterDoc.exists ? commenterDoc.data().name || 'Anonymous' : 'Anonymous';
+      
+      // إنشاء الإشعار في قاعدة البيانات
+      const notification = {
+        uid: productOwnerId,
+        senderUid: commenterId,
+        senderName: commenterName,
+        senderImageUrl: commenterDoc.exists ? commenterDoc.data().profileImageUrl || '' : '',
+        type: 'product_comment',
+        productId: productId,
+        productName: product.name || 'Product',
+        commentText: text,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        message: `${commenterName} commented on your product "${product.name || 'Product'}"`,
+        read: false
+      };
+      
+      // حفظ الإشعار
+      await db.collection('notifications').add(notification);
+      console.log('Notification saved to database');
+      
+      // جلب FCM token للمستخدم وإرسال Push Notification
+      const ownerDoc = await db.collection('users').doc(productOwnerId).get();
+      if (ownerDoc.exists && ownerDoc.data().fcmToken) {
+        const fcmToken = ownerDoc.data().fcmToken;
+        
+        const message = {
+          token: fcmToken,
+          notification: {
+            title: 'New Comment 💬',
+            body: `${commenterName} commented on your product "${product.name || 'Product'}"`,
+          },
+          data: {
+            type: 'product_comment',
+            productId: productId,
+            senderUid: commenterId,
+            click_action: 'FLUTTER_NOTIFICATION_CLICK'
+          }
+        };
+        
+        try {
+          await admin.messaging().send(message);
+          console.log('✅ Product comment push notification sent successfully');
+        } catch (error) {
+          console.error('❌ Error sending push notification:', error);
+        }
+      } else {
+        console.log('No FCM token found for user:', productOwnerId);
+      }
+      
+    } catch (error) {
+      console.error('❌ Error in onProductCommentAdded:', error);
+    }
   });
 
-// 🔔 إشعار عند إضافة كومنت على منشور - تم تعطيلها لمنع التكرار  
+// 🔔 إشعار عند إضافة كومنت على منشور
 exports.onPostCommentAdded = functions.firestore
   .document('posts/{postId}/comments/{commentId}')
   .onCreate(async (snap, context) => {
-    // تم تعطيل هذه الدالة لمنع تكرار الإشعارات
-    // الإشعارات تتم من خلال التطبيق مباشرة
-    console.log('🚫 Post comment notification blocked to prevent duplicates');
-    return;
+    try {
+      const commentData = snap.data();
+      const { userId: commenterId, text } = commentData;
+      const postId = context.params.postId;
+      
+      console.log('Comment added for post:', postId, 'by user:', commenterId);
+      
+      // جلب بيانات المنشور
+      const postDoc = await db.collection('posts').doc(postId).get();
+      if (!postDoc.exists) {
+        console.log('Post not found:', postId);
+        return;
+      }
+      
+      const post = postDoc.data();
+      const postOwnerId = post.createdBy;
+      
+      // ماتبعتش إشعار للشخص نفسه
+      if (commenterId === postOwnerId) {
+        console.log('User commented on their own post, skipping notification');
+        return;
+      }
+      
+      // جلب بيانات الشخص اللي علق
+      const commenterDoc = await db.collection('users').doc(commenterId).get();
+      const commenterName = commenterDoc.exists ? commenterDoc.data().name || 'Anonymous' : 'Anonymous';
+      
+      // إنشاء الإشعار في قاعدة البيانات
+      const notification = {
+        uid: postOwnerId,
+        senderUid: commenterId,
+        senderName: commenterName,
+        senderImageUrl: commenterDoc.exists ? commenterDoc.data().profileImageUrl || '' : '',
+        type: 'post_comment',
+        postId: postId,
+        postTitle: post.title || 'Post',
+        commentText: text,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        message: `${commenterName} commented on your post "${post.title || 'Post'}"`,
+        read: false
+      };
+      
+      // حفظ الإشعار
+      await db.collection('notifications').add(notification);
+      console.log('Notification saved to database');
+      
+      // جلب FCM token للمستخدم وإرسال Push Notification
+      const ownerDoc = await db.collection('users').doc(postOwnerId).get();
+      if (ownerDoc.exists && ownerDoc.data().fcmToken) {
+        const fcmToken = ownerDoc.data().fcmToken;
+        
+        const message = {
+          token: fcmToken,
+          notification: {
+            title: 'New Comment 💬',
+            body: `${commenterName} commented on your post "${post.title || 'Post'}"`,
+          },
+          data: {
+            type: 'post_comment',
+            postId: postId,
+            senderUid: commenterId,
+            click_action: 'FLUTTER_NOTIFICATION_CLICK'
+          }
+        };
+        
+        try {
+          await admin.messaging().send(message);
+          console.log('✅ Post comment push notification sent successfully');
+        } catch (error) {
+          console.error('❌ Error sending push notification:', error);
+        }
+      } else {
+        console.log('No FCM token found for user:', postOwnerId);
+      }
+      
+    } catch (error) {
+      console.error('❌ Error in onPostCommentAdded:', error);
+    }
   });

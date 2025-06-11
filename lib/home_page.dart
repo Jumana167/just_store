@@ -209,7 +209,41 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ),
             // Recommendations Section
             SliverToBoxAdapter(
-              child: buildRecommendationsSection(),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+                child: Row(
+                  children: [
+                    const Icon(Icons.recommend, color: AppTheme.primaryBlue, size: 22),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Recommended for You',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: theme.textTheme.bodyLarge?.color,
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const RecommendationsPage()),
+                        );
+                      },
+                      child: const Text('See all'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              sliver: _buildRecommendationsList(),
+            ),
+            // Add bottom padding for FAB
+            const SliverToBoxAdapter(
+              child: SizedBox(height: 80),
             ),
           ],
         ),
@@ -973,129 +1007,118 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget buildRecommendationsSection() {
+  Widget _buildRecommendationsList() {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return const SizedBox();
+    if (user == null) return const SliverToBoxAdapter(child: SizedBox());
 
-    return FutureBuilder<List<DocumentSnapshot>>(
-      future: getCombinedRecommendations(user.uid),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const SizedBox();
-        }
-        final products = snapshot.data!;
-        // Determine the reason for recommendations
-        String reason = 'Recommended for you';
-        // You can further improve this by checking user data
-        // For now, if products are from favorite categories, show that
-        // Otherwise, show 'Latest products for you'
-        // (Assume getCombinedRecommendations returns products from favorite categories if available)
-        reason = 'Products from your favorite categories';
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                      reason,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const RecommendationsPage())
-                      );
-                    },
-                    child: const Text('See all'),
-                  ),
-                ],
-              ),
-              SizedBox(
-                height: 120,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: products.length,
-                  itemBuilder: (context, index) {
-                    final data = products[index].data() as Map<String, dynamic>;
-                    return GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => PostDetailsPage(
-                                postId: products[index].id,
-                                postData: data
-                            ),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        width: 100,
-                        margin: const EdgeInsets.only(right: 12),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).cardColor,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            ClipRRect(
-                              borderRadius: const BorderRadius.only(
-                                  topLeft: Radius.circular(12),
-                                  topRight: Radius.circular(12)),
-                              child: data['imageUrl'] != null && data['imageUrl'].isNotEmpty
-                                  ? Image.network(
-                                data['imageUrl'],
-                                height: 60,
-                                width: 100,
-                                fit: BoxFit.cover,
-                              )
-                                  : Container(
-                                height: 60,
-                                width: 100,
-                                color: Theme.of(context).colorScheme.surface,
-                                child: const Icon(Icons.image, color: Colors.grey),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
-                              child: Text(
-                                data['name'] ?? '',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ],
+    return SliverToBoxAdapter(
+      child: FutureBuilder<List<DocumentSnapshot>>(
+        future: getCombinedRecommendations(user.uid),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const SizedBox();
+          }
+
+          final products = snapshot.data!;
+          return SizedBox(
+            height: 180,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: products.length,
+              itemBuilder: (context, index) {
+                final data = products[index].data() as Map<String, dynamic>;
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PostDetailsPage(
+                          postId: products[index].id,
+                          postData: data,
                         ),
                       ),
                     );
                   },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+                  child: Container(
+                    width: 140,
+                    margin: const EdgeInsets.only(right: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                          child: data['imageUrl'] != null
+                              ? Image.network(
+                                  data['imageUrl'],
+                                  height: 100,
+                                  width: 140,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      height: 100,
+                                      width: 140,
+                                      color: Colors.grey[200],
+                                      child: const Icon(Icons.error_outline, color: Colors.grey),
+                                    );
+                                  },
+                                )
+                              : Container(
+                                  height: 100,
+                                  width: 140,
+                                  color: Colors.grey[200],
+                                  child: const Icon(Icons.image, color: Colors.grey),
+                                ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                data['name'] ?? '',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${data['price']} JD',
+                                style: TextStyle(
+                                  color: AppTheme.primaryBlue,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          );
+        },
+      ),
     );
   }
 
