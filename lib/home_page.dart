@@ -1231,6 +1231,8 @@ extension AppLocalizationsCategory on AppLocalizations {
         return electronics;
       case 'Tools':
         return engineeringTools;
+      case 'Medical Equipment':
+        return medicalEquipment;
       case 'Medical':
         return dentalEquipment;
       case 'Arts':

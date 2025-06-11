@@ -86,7 +86,7 @@ class _AddProductPageState extends State<AddProductPage> {
   ];
 
   List<String> get _subCategories {
-    switch (selectedCollege) {
+    switch (selectedCategory) {
       case 'collegeOfEngineering':
         return ['engineeringTools', 'labEquipment', 'drawingTools', 'calculators', 'textbooks'];
       case 'collegeOfMedicine':
@@ -107,6 +107,14 @@ class _AddProductPageState extends State<AddProductPage> {
         return ['architecturalTools', 'drawingBoards', 'architecturalBooks'];
       case 'collegeOfPharmacy':
         return ['pharmacyEquipment', 'pharmacyBooks', 'labMaterials'];
+      case 'Medical Equipment':
+        return [
+          'Medical Devices',
+          'Surgical Tools',
+          'Medical Supplies',
+          'Medical Books',
+          'Other',
+        ];
       default:
         return [];
     }

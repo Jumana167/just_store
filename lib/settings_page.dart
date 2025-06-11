@@ -4,6 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'theme_provider.dart';
 import 'providers/language_provider.dart';
@@ -24,18 +27,22 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  bool notificationsOn = false;
+  bool notificationsOn = true;
   final int _unreadMessages = 5;
   final FlutterLocalNotificationsPlugin _notificationsPlugin =
   FlutterLocalNotificationsPlugin();
 
-  String _userName = 'User';
+  String? _userName;
+  String? _fcmToken;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
     _initializeNotifications();
     _loadSettings();
+    _loadFCMToken();
+    _loadUserName();
   }
 
   Future<void> _initializeNotifications() async {
@@ -47,8 +54,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      notificationsOn = prefs.getBool('notificationsOn') ?? false;
-      _userName = prefs.getString('username') ?? 'User';
+      notificationsOn = prefs.getBool('notificationsOn') ?? true;
     });
 
     if (notificationsOn) {
@@ -81,6 +87,90 @@ class _SettingsPageState extends State<SettingsPage> {
     await _notificationsPlugin.cancelAll();
   }
 
+  Future<void> _loadFCMToken() async {
+    setState(() => _isLoading = true);
+    try {
+      // جلب FCM Token من Firebase
+      final token = await FirebaseMessaging.instance.getToken();
+      
+      // جلب FCM Token المحفوظ في Firestore
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        
+        final savedToken = userDoc.data()?['fcmToken'];
+        
+        setState(() {
+          _fcmToken = 'Current Token: $token\n\nSaved Token: $savedToken';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _fcmToken = 'Error loading token: $e';
+      });
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _updateFCMToken() async {
+    setState(() => _isLoading = true);
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        // جلب FCM Token جديد
+        final token = await FirebaseMessaging.instance.getToken();
+        
+        // حفظ Token في Firestore
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .update({
+          'fcmToken': token,
+          'lastTokenUpdate': FieldValue.serverTimestamp(),
+        });
+
+        // تحديث الواجهة
+        await _loadFCMToken();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ تم تحديث FCM Token بنجاح'),
+              backgroundColor: AppTheme.success,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ حدث خطأ: $e'),
+            backgroundColor: AppTheme.error,
+          ),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadUserName() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (mounted) {
+        setState(() {
+          _userName = doc.data()?['name'] ?? 'User';
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -98,7 +188,7 @@ class _SettingsPageState extends State<SettingsPage> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => ProfilePage(userName: _userName),
+                builder: (_) => ProfilePage(userName: _userName ?? l10n.userName),
               ),
             );
           }),
@@ -158,7 +248,7 @@ class _SettingsPageState extends State<SettingsPage> {
             Icons.description,
             l10n.termsConditions,
             AppTheme.info,
-                () {
+            () {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const TermsAndConditionsPage()),
@@ -167,9 +257,9 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           _buildSettingsTile(
             Icons.lock,
-            'Privacy Policy',
+            l10n.privacyPolicy,
             AppTheme.error,
-                () {
+            () {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const PrivacyPolicyPage()),
@@ -178,32 +268,38 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           _buildSettingsTile(
             Icons.star,
-            'Rate This App',
+            l10n.rateApp,
             AppTheme.primaryBlue,
-                () {
+            () {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const RateAppPage()),
               );
             },
           ),
-          _buildSettingsTile(Icons.share, 'Share This App', Colors.pink, () {
-            Share.share(
-              'Check out this awesome app Just Store!\nhttps://JUSTSTORE.com/juststore',
-              subject: 'Just Store App 🌟',
-            );
-          }),
+          _buildSettingsTile(
+            Icons.share,
+            l10n.shareApp,
+            Colors.pink,
+            () {
+              Share.share(
+                'Check out this awesome app Just Store!\nhttps://JUSTSTORE.com/juststore',
+                subject: 'Just Store App 🌟',
+              );
+            },
+          ),
           _buildSettingsTile(
             Icons.info_outline,
-            'About',
+            l10n.about,
             AppTheme.accentBlue,
-                () {
+            () {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const AboutAppPage()),
               );
             },
           ),
+          const SizedBox(height: 24),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -225,7 +321,7 @@ class _SettingsPageState extends State<SettingsPage> {
           } else if (index == 2) {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (_) => ProfilePage(userName: _userName)),
+              MaterialPageRoute(builder: (_) => ProfilePage(userName: _userName ?? '')),
             );
           }
         },

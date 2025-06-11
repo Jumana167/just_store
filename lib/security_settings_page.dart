@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'app_theme.dart';
 
 class SecuritySettingsPage extends StatefulWidget {
   const SecuritySettingsPage({super.key});
@@ -100,106 +101,50 @@ class _SecuritySettingsPageState extends State<SecuritySettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    const Color mainColor = Color(0xFF3B3B98);
-    final Color textColor = isDark ? Colors.white : Colors.black;
-    final Color fieldColor = isDark ? Colors.grey[800]! : Colors.grey[200]!;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final Color textColor = theme.textTheme.bodyLarge?.color ?? Colors.black;
+    final Color fieldColor = theme.cardColor;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: Column(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppWidgets.buildAppBar(title: 'Security Settings'),
+      body: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 20),
         children: [
-          _buildHeader(mainColor),
+          const SizedBox(height: 10),
+          _buildLabel("Edit your universal email:", textColor),
+          const SizedBox(height: 8),
+          _buildInputField(emailController, fieldColor, textColor),
+
+          const SizedBox(height: 20),
+          _buildLabel("Current Password (for verification):", textColor),
+          const SizedBox(height: 8),
+          _buildInputField(currentPasswordController, fieldColor, textColor, isPassword: true),
+
+          const SizedBox(height: 20),
+          _buildLabel("New Password:", textColor),
+          const SizedBox(height: 8),
+          _buildInputField(newPasswordController, fieldColor, textColor, isPassword: true),
+
+          const SizedBox(height: 20),
+          _buildLabel("Confirm New Password:", textColor),
+          const SizedBox(height: 8),
+          _buildInputField(confirmPasswordController, fieldColor, textColor, isPassword: true),
+
           const SizedBox(height: 30),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 25),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildLabel("Edit your universal email:", textColor),
-                const SizedBox(height: 8),
-                _buildInputField(emailController, fieldColor, textColor),
-
-                const SizedBox(height: 20),
-                _buildLabel("Current Password (for verification):", textColor),
-                const SizedBox(height: 8),
-                _buildInputField(currentPasswordController, fieldColor, textColor, isPassword: true),
-
-                const SizedBox(height: 20),
-                _buildLabel("New Password:", textColor),
-                const SizedBox(height: 8),
-                _buildInputField(newPasswordController, fieldColor, textColor, isPassword: true),
-
-                const SizedBox(height: 20),
-                _buildLabel("Confirm New Password:", textColor),
-                const SizedBox(height: 8),
-                _buildInputField(confirmPasswordController, fieldColor, textColor, isPassword: true),
-
-                const SizedBox(height: 30),
-                Center(
-                  child: ElevatedButton.icon(
-                    onPressed: isLoading ? null : saveChanges,
-                    icon: isLoading
-                        ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
-                        : const Icon(Icons.save),
-                    label: Text(isLoading ? "Saving..." : "Save"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: mainColor,
-                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+          Center(
+            child: AppWidgets.buildPrimaryButton(
+              text: isLoading ? "Saving..." : "Save",
+              isLoading: isLoading,
+              icon: Icons.save,
+              onPressed: () {
+                if (!isLoading) saveChanges();
+              },
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildHeader(Color mainColor) {
-    return Stack(
-      children: [
-        Container(
-          height: 140,
-          decoration: BoxDecoration(
-            color: mainColor,
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(50),
-              bottomRight: Radius.circular(50),
-            ),
-          ),
-        ),
-        SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.only(left: 10, top: 10),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                const SizedBox(width: 10),
-                const Text(
-                  "Security Settings",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                )
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 

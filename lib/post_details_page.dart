@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'app_theme.dart';
+// import 'models/post.dart';
+// import 'models/comment.dart';
+// import 'models/user.dart';
+import 'services/notification_service.dart';
+// import 'services/firestore_notification_service.dart';
+import 'chat_page.dart';
 import 'services/chat_service.dart';
 import 'services/user_service.dart';
-import 'chat_page.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'add_product_page.dart';
 import 'chat_room_page.dart';
 
@@ -33,6 +38,8 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
   late AnimationController _slideController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+  late AnimationController _likeController;
+  late Animation<double> _likeAnimation;
 
   @override
   void initState() {
@@ -42,10 +49,13 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
 
     _fadeController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _slideController = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _likeController = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
 
     _fadeAnimation = CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut);
     _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
         .animate(CurvedAnimation(parent: _slideController, curve: Curves.easeOut));
+    _likeAnimation = Tween<double>(begin: 1.0, end: 1.3)
+        .animate(CurvedAnimation(parent: _likeController, curve: Curves.elasticOut));
 
     _fadeController.forward();
     _slideController.forward();
@@ -56,6 +66,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
     _commentController.dispose();
     _fadeController.dispose();
     _slideController.dispose();
+    _likeController.dispose();
     super.dispose();
   }
 
@@ -89,54 +100,204 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
   Future<void> _toggleLike() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
-
-    final postRef = FirebaseFirestore.instance.collection('posts').doc(widget.postId);
-
-    await FirebaseFirestore.instance.runTransaction((transaction) async {
-      final doc = await transaction.get(postRef);
-      final data = doc.data()!;
-      final likedBy = List<String>.from(data['likedBy'] ?? []);
-
-      if (likedBy.contains(userId)) {
-        likedBy.remove(userId);
-        transaction.update(postRef, {
-          'likedBy': likedBy,
-          'likesCount': (data['likesCount'] ?? 0) - 1,
-        });
-      } else {
-        likedBy.add(userId);
-        transaction.update(postRef, {
-          'likedBy': likedBy,
-          'likesCount': (data['likesCount'] ?? 0) + 1,
-        });
-      }
+    _likeController.forward().then((_) {
+      _likeController.reverse();
     });
-
     setState(() {
       _isLiked = !_isLiked;
       _likesCount += _isLiked ? 1 : -1;
     });
+    try {
+      final postRef = FirebaseFirestore.instance.collection('posts').doc(widget.postId);
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final doc = await transaction.get(postRef);
+        final data = doc.data()!;
+        final likedBy = List<String>.from(data['likedBy'] ?? []);
+        if (likedBy.contains(userId)) {
+          likedBy.remove(userId);
+          transaction.update(postRef, {
+            'likedBy': likedBy,
+            'likesCount': (data['likesCount'] ?? 0) - 1,
+          });
+        } else {
+          likedBy.add(userId);
+          transaction.update(postRef, {
+            'likedBy': likedBy,
+            'likesCount': (data['likesCount'] ?? 0) + 1,
+          });
+        }
+      });
+      if (_isLiked) {
+        final postOwnerId = widget.postData['ownerId'];
+        if (postOwnerId != null && postOwnerId != userId) {
+          final currentUser = FirebaseAuth.instance.currentUser;
+          // await NotificationService.sendProductLikeNotification(
+          //   productOwnerUid: postOwnerId,
+          //   senderUid: userId,
+          // );
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _isLiked = !_isLiked;
+        _likesCount += _isLiked ? 1 : -1;
+      });
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating like: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      print('❌ Error toggling like: $e');
+    }
   }
 
   Future<void> _addComment() async {
     if (_commentController.text.trim().isEmpty) return;
-
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+    final commentText = _commentController.text.trim();
+    try {
+      _commentController.clear();
+      await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(widget.postId)
+          .collection('comments')
+          .add({
+        'text': commentText,
+        'userId': user.uid,
+        'userName': user.displayName ?? 'Anonymous',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+      await _loadComments();
+      final postOwnerId = widget.postData['ownerId'];
+      if (postOwnerId != null && postOwnerId != user.uid) {
+        // await NotificationService.sendProductCommentNotification(
+        //   productOwnerUid: postOwnerId,
+        //   senderUid: user.uid,
+        // );
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Comment completed successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      _commentController.text = commentText;
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error adding comment: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+      print('❌ Error adding comment: $e');
+    }
+  }
 
-    await FirebaseFirestore.instance
-        .collection('posts')
-        .doc(widget.postId)
-        .collection('comments')
-        .add({
-      'text': _commentController.text.trim(),
-      'userId': user.uid,
-      'userName': user.displayName ?? 'Anonymous',
-      'timestamp': FieldValue.serverTimestamp(),
-    });
+  Future<void> _editComment(String commentId, String currentText) async {
+    final l10n = AppLocalizations.of(context)!;
+    final TextEditingController controller = TextEditingController(text: currentText);
+    
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.editComment),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: l10n.editCommentHint,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: Text(l10n.update),
+          ),
+        ],
+      ),
+    );
 
-    _commentController.clear();
-    _loadComments();
+    if (result != null && result.isNotEmpty) {
+      try {
+        final newText = (result is String ? result : result.toString()).replaceAll('\n', ' ');
+        await FirebaseFirestore.instance
+            .collection('posts')
+            .doc(widget.postId)
+            .collection('comments')
+            .doc(commentId)
+            .update({'text': newText});
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.commentUpdated)),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text((l10n.errorUpdatingComment ?? '').toString().replaceAll('{error}', e.toString()))),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _deleteComment(String commentId) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.deleteComment),
+        content: Text(l10n.deleteCommentConfirmation),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: Text(l10n.delete),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('posts')
+            .doc(widget.postId)
+            .collection('comments')
+            .doc(commentId)
+            .delete();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.commentDeleted)),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text((l10n.errorDeletingComment ?? '').toString().replaceAll('{error}', e.toString()))),
+          );
+        }
+      }
+    }
   }
 
   @override

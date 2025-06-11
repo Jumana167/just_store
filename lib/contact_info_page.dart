@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'app_theme.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ContactInfoPage extends StatefulWidget {
   const ContactInfoPage({super.key});
@@ -92,7 +94,7 @@ class _ContactInfoPageState extends State<ContactInfoPage> {
       appBar: AppBar(
         backgroundColor: AppTheme.primaryBlue,
         centerTitle: true,
-        title: Text(l10n.contactUs, style: const TextStyle(color: AppTheme.white)),
+        title: Text(l10n.contactInfo, style: const TextStyle(color: AppTheme.white)),
         iconTheme: const IconThemeData(color: AppTheme.white),
       ),
       body: Padding(

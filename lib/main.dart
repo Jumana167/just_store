@@ -248,15 +248,12 @@ class _MyAppState extends State<MyApp> {
   void _setupFCMListeners() {
     // معالجة الإشعارات في الواجهة الأمامية
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('📱 [Foreground] Message received: ${message.messageId}');
-      debugPrint('📱 [Foreground] Title: ${message.notification?.title}');
-      debugPrint('📱 [Foreground] Body: ${message.notification?.body}');
-
-      // عرض الإشعار محلياً
-      _showLocalNotification(message);
-
-      // حفظ الإشعار في Firestore
-      _saveNotificationToFirestore(message);
+      debugPrint('📲 FCM Message received: [0m${message.messageId}');
+      _saveNotificationToFirestore(message); // احفظ الإشعار في Firestore
+      // يمكنك هنا أيضًا حذف الإشعارات العربية إذا أردت
+      Future.delayed(const Duration(milliseconds: 500), () {
+        FirestoreNotificationService.removeArabicNotificationsImmediate();
+      });
     });
 
     // معالجة النقر على الإشعار

@@ -305,5 +305,14 @@
     "contactViaPhone": "اتصال هاتفي",
     "whatsappNumber": "رقم الواتساب",
     "phoneNumber": "رقم الهاتف",
-    "contactAppHint": "سيتم التواصل عبر رسائل التطبيق مباشرة."
+    "contactAppHint": "سيتم التواصل عبر رسائل التطبيق مباشرة.",
+    "contactInfo": "معلومات الاتصال",
+    "notificationsTitle": "الإشعارات",
+    "markAllAsRead": "تعليم الكل كمقروء",
+    "clearAllNotifications": "مسح جميع الإشعارات",
+    "clearAll": "مسح الكل",
+    "postNotFoundOrDeleted": "المنشور غير موجود أو تم حذفه",
+    "errorLoadingProduct": "حدث خطأ أثناء تحميل المنتج: {error}",
+    "accept": "موافقة",
+    "thankYou": "شكراً لك"
 }

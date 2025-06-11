@@ -45,4 +45,16 @@ const List<Map<String, dynamic>> kAppCategories = [
     'color': AppTheme.mediumGrey,
     'subcategories': ['Paintings', 'Sculptures', 'Handmade', 'Other'],
   },
+  {
+    'label': 'Medical Equipment',
+    'icon': Icons.local_hospital,
+    'color': AppTheme.warning,
+    'subcategories': [
+      'Medical Devices',
+      'Surgical Tools',
+      'Medical Supplies',
+      'Medical Books',
+      'Other',
+    ],
+  },
 ];
