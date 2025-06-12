@@ -63,16 +63,20 @@ class _AddProductPageState extends State<AddProductPage> {
   ];
 
   final List<String> _colleges = [
-    'collegeOfEngineering',
-    'collegeOfMedicine',
-    'collegeOfDentistry',
-    'collegeOfScience',
-    'collegeOfArts',
-    'collegeOfBusiness',
-    'collegeOfEducation',
-    'collegeOfComputerScience',
-    'collegeOfArchitecture',
-    'collegeOfPharmacy',
+    'medicine',
+    'appliedMedicalSciences',
+    'engineering',
+    'pharmacy',
+    'nursing',
+    'dentistry',
+    'agriculture',
+    'veterinaryMedicine',
+    'computerAndInformationTechnology',
+    'martialSciences',
+    'scienceAndArts',
+    'languageCenter',
+    'nanotechnologyInstitute',
+    'architectureAndDesign',
   ];
 
   final List<String> _studyYears = [
@@ -87,6 +91,16 @@ class _AddProductPageState extends State<AddProductPage> {
 
   List<String> get _subCategories {
     switch (selectedCategory) {
+      case 'books':
+        return [
+          'universityCompulsoryReq',
+          'universityElectiveReq1',
+          'universityElectiveReq2',
+          'universityElectiveReq3',
+          'facultyCompulsoryReq',
+          'departmentCompulsoryReq',
+          'departmentElectiveReq'
+        ];
       case 'collegeOfEngineering':
         return ['engineeringTools', 'labEquipment', 'drawingTools', 'calculators', 'textbooks'];
       case 'collegeOfMedicine':
@@ -174,8 +188,15 @@ class _AddProductPageState extends State<AddProductPage> {
         selectedCollege == null ||
         selectedStudyYear == null ||
         selectedSubCategory == null) {
+      String errorMessage = l10n.pleaseCompleteAllFields;
+
+
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.pleaseCompleteAllFields)),
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -188,7 +209,7 @@ class _AddProductPageState extends State<AddProductPage> {
 
     try {
       String imageUrl = existingImageUrl ?? '';
-      
+
       if (selectedImage != null) {
         imageUrl = await _uploadImageToCloudinary(selectedImage!);
       }
@@ -202,7 +223,7 @@ class _AddProductPageState extends State<AddProductPage> {
           ownerName = snapshot.value as String;
         }
       }
-      
+
       if (isEditing) {
         final updateData = {
           'name': _nameCtrl.text.trim(),
@@ -219,7 +240,7 @@ class _AddProductPageState extends State<AddProductPage> {
           'whatsapp': _whatsappCtrl.text,
           'phone': _phoneCtrl.text,
         };
-        
+
         await FirebaseFirestore.instance
             .collection('posts')
             .doc(widget.postId)
@@ -246,12 +267,12 @@ class _AddProductPageState extends State<AddProductPage> {
           'whatsapp': _whatsappCtrl.text,
           'phone': _phoneCtrl.text,
         };
-        
+
         final docRef = await FirebaseFirestore.instance.collection('posts').add(newPostData);
 
         if (mounted) {
           Navigator.pop(context); // Close loading
-          
+
           if (isEditing) {
             Navigator.pop(context); // Return to details page
             ScaffoldMessenger.of(context).showSnackBar(
@@ -310,30 +331,30 @@ class _AddProductPageState extends State<AddProductPage> {
                     image: selectedImage != null
                         ? DecorationImage(image: FileImage(selectedImage!), fit: BoxFit.cover)
                         : existingImageUrl != null
-                            ? DecorationImage(image: NetworkImage(existingImageUrl!), fit: BoxFit.cover)
-                            : null,
+                        ? DecorationImage(image: NetworkImage(existingImageUrl!), fit: BoxFit.cover)
+                        : null,
                   ),
                   child: (selectedImage == null && existingImageUrl == null)
                       ? const Center(child: Icon(Icons.add_a_photo, size: 40, color: AppTheme.mediumGrey))
                       : Stack(
-                          children: [
-                            if (selectedImage != null || existingImageUrl != null)
-                              Positioned(
-                                top: 8,
-                                right: 8,
-                                child: Container(
-                                  decoration: const BoxDecoration(
-                                    color: Colors.black54,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: IconButton(
-                                    icon: const Icon(Icons.edit, color: Colors.white),
-                                    onPressed: _pickImage,
-                                  ),
-                                ),
-                              ),
-                          ],
+                    children: [
+                      if (selectedImage != null || existingImageUrl != null)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            decoration: const BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.white),
+                              onPressed: _pickImage,
+                            ),
+                          ),
                         ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -351,12 +372,31 @@ class _AddProductPageState extends State<AddProductPage> {
                 l10n.category,
                 _categories,
                 selectedCategory,
-                (val) {
-                  setState(() => selectedCategory = val);
+                    (val) {
+                  setState(() {
+                    selectedCategory = val;
+                    selectedSubCategory = null; // Reset sub-category when category changes
+                  });
                 },
               ),
 
               const SizedBox(height: 12),
+              // Show sub-category dropdown if category has subcategories
+              if (selectedCategory != null && _subCategories.isNotEmpty)
+                Column(
+                  children: [
+                    _buildDropdown(
+                      l10n.subCategory,
+                      _subCategories,
+                      selectedSubCategory,
+                          (val) {
+                        setState(() => selectedSubCategory = val);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
+
               _buildDropdown(l10n.condition, _conditions, selectedCondition, (val) {
                 setState(() => selectedCondition = val);
               }),
@@ -366,11 +406,8 @@ class _AddProductPageState extends State<AddProductPage> {
                 l10n.college,
                 _colleges,
                 selectedCollege,
-                (val) {
-                  setState(() {
-                    selectedCollege = val;
-                    selectedSubCategory = null; // Reset sub-category when college changes
-                  });
+                    (val) {
+                  setState(() => selectedCollege = val);
                 },
               ),
 
@@ -379,21 +416,10 @@ class _AddProductPageState extends State<AddProductPage> {
                 l10n.studyYear,
                 _studyYears,
                 selectedStudyYear,
-                (val) {
+                    (val) {
                   setState(() => selectedStudyYear = val);
                 },
               ),
-
-              const SizedBox(height: 12),
-              if (selectedCollege != null) // Only show sub-category if college is selected
-                _buildDropdown(
-                  l10n.subCategory,
-                  _subCategories,
-                  selectedSubCategory,
-                  (val) {
-                    setState(() => selectedSubCategory = val);
-                  },
-                ),
 
               const SizedBox(height: 20),
               // خيارات التواصل الدائرية
@@ -455,35 +481,47 @@ class _AddProductPageState extends State<AddProductPage> {
       items: options.map((val) {
         String displayText;
         switch (val) {
-          case 'collegeOfEngineering':
-            displayText = l10n.collegeOfEngineering;
+          case 'medicine':
+            displayText = l10n.medicine;
             break;
-          case 'collegeOfMedicine':
-            displayText = l10n.collegeOfMedicine;
+          case 'appliedMedicalSciences':
+            displayText = l10n.appliedMedicalSciences;
             break;
-          case 'collegeOfDentistry':
-            displayText = l10n.collegeOfDentistry;
+          case 'engineering':
+            displayText = l10n.engineering;
             break;
-          case 'collegeOfScience':
-            displayText = l10n.collegeOfScience;
+          case 'pharmacy':
+            displayText = l10n.pharmacy;
             break;
-          case 'collegeOfArts':
-            displayText = l10n.collegeOfArts;
+          case 'nursing':
+            displayText = l10n.nursing;
             break;
-          case 'collegeOfBusiness':
-            displayText = l10n.collegeOfBusiness;
+          case 'dentistry':
+            displayText = l10n.dentistry;
             break;
-          case 'collegeOfEducation':
-            displayText = l10n.collegeOfEducation;
+          case 'agriculture':
+            displayText = l10n.agriculture;
             break;
-          case 'collegeOfComputerScience':
-            displayText = l10n.collegeOfComputerScience;
+          case 'veterinaryMedicine':
+            displayText = l10n.veterinaryMedicine;
             break;
-          case 'collegeOfArchitecture':
-            displayText = l10n.collegeOfArchitecture;
+          case 'computerAndInformationTechnology':
+            displayText = l10n.computerAndInformationTechnology;
             break;
-          case 'collegeOfPharmacy':
-            displayText = l10n.collegeOfPharmacy;
+          case 'martialSciences':
+            displayText = l10n.martialSciences;
+            break;
+          case 'scienceAndArts':
+            displayText = l10n.scienceAndArts;
+            break;
+          case 'languageCenter':
+            displayText = l10n.languageCenter;
+            break;
+          case 'nanotechnologyInstitute':
+            displayText = l10n.nanotechnologyInstitute;
+            break;
+          case 'architectureAndDesign':
+            displayText = l10n.architectureAndDesign;
             break;
           case 'firstYear':
             displayText = l10n.firstYear;
@@ -508,6 +546,32 @@ class _AddProductPageState extends State<AddProductPage> {
             break;
           default:
             displayText = val;
+            // Add translations for book subcategories
+            if (selectedCategory == 'books') {
+              switch (val) {
+                case 'universityCompulsoryReq':
+                  displayText = l10n.universityCompulsoryReq;
+                  break;
+                case 'universityElectiveReq1':
+                  displayText = l10n.universityElectiveReq1;
+                  break;
+                case 'universityElectiveReq2':
+                  displayText = l10n.universityElectiveReq2;
+                  break;
+                case 'universityElectiveReq3':
+                  displayText = l10n.universityElectiveReq3;
+                  break;
+                case 'facultyCompulsoryReq':
+                  displayText = l10n.facultyCompulsoryReq;
+                  break;
+                case 'departmentCompulsoryReq':
+                  displayText = l10n.departmentCompulsoryReq;
+                  break;
+                case 'departmentElectiveReq':
+                  displayText = l10n.departmentElectiveReq;
+                  break;
+              }
+            }
         }
         return DropdownMenuItem(
           value: val,
