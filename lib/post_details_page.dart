@@ -325,7 +325,7 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
                 position: _slideAnimation,
                 child: Column(
                   children: [
-                    _buildPostInfo(name, price, description, condition, location, category, ownerName),
+                    _buildProductDetails(),
                     _buildActionButtons(),
                     _buildLikesSection(),
                     _buildCommentsSection(),
@@ -410,6 +410,43 @@ class _PostDetailsPageState extends State<PostDetailsPage> with TickerProviderSt
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildProductDetails() {
+    final l10n = AppLocalizations.of(context)!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.postData['sellerRating'] != null && widget.postData['sellerRating']! < 2.0)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.error.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.error),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: AppTheme.error),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.lowSellerRatingWarning,
+                    style: TextStyle(
+                      color: AppTheme.error,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        _buildPostInfo(widget.postData['name'] ?? 'Untitled', widget.postData['price']?.toString() ?? '0', widget.postData['description'] ?? '',
+            widget.postData['condition'] ?? 'Good', widget.postData['location'] ?? 'Unknown', widget.postData['category'] ?? '', widget.postData['ownerName'] ?? 'Anonymous'),
+      ],
     );
   }
 

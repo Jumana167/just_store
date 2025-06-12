@@ -345,85 +345,116 @@ class _ProfilePageState extends State<ProfilePage> with SingleTickerProviderStat
       return const Center(child: CircularProgressIndicator());
     }
 
+    final l10n = AppLocalizations.of(context)!;
+
     return TweenAnimationBuilder<double>(
       duration: const Duration(milliseconds: 800),
       tween: Tween(begin: 0.0, end: _averageRating / 5),
       builder: (context, value, child) {
-        return Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).cardColor,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.05) ?? Colors.grey,
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+        return Column(
+          children: [
+            if (_averageRating < 2.0)
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.error.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.error),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: AppTheme.error),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        l10n.lowRatingWarning,
+                        style: TextStyle(
+                          color: AppTheme.error,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.05) ?? Colors.grey,
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
                 children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      TweenAnimationBuilder<double>(
+                        duration: const Duration(milliseconds: 800),
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        builder: (context, value, child) {
+                          return Transform.scale(
+                            scale: value,
+                            child: Icon(
+                              Icons.star,
+                              color: Colors.amber,
+                              size: 32,
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(width: 8),
+                      TweenAnimationBuilder<double>(
+                        duration: const Duration(milliseconds: 800),
+                        tween: Tween(begin: 0.0, end: _averageRating),
+                        builder: (context, value, child) {
+                          return Text(
+                            value.toStringAsFixed(1),
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.darkGrey,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                   TweenAnimationBuilder<double>(
                     duration: const Duration(milliseconds: 800),
                     tween: Tween(begin: 0.0, end: 1.0),
                     builder: (context, value, child) {
-                      return Transform.scale(
-                        scale: value,
-                        child: Icon(
-                          Icons.star,
-                          color: Colors.amber,
-                          size: 32,
+                      return Opacity(
+                        opacity: value,
+                        child: Text(
+                          '$_totalRatings ${_totalRatings == 1 ? 'rating' : 'ratings'}',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: AppTheme.mediumGrey,
+                          ),
                         ),
                       );
                     },
                   ),
-                  const SizedBox(width: 8),
-                  TweenAnimationBuilder<double>(
-                    duration: const Duration(milliseconds: 800),
-                    tween: Tween(begin: 0.0, end: _averageRating),
-                    builder: (context, value, child) {
-                      return Text(
-                        value.toStringAsFixed(1),
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.darkGrey,
-                        ),
-                      );
-                    },
+                  const SizedBox(height: 16),
+                  LinearProgressIndicator(
+                    value: value,
+                    backgroundColor: Colors.grey[200],
+                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.amber),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              TweenAnimationBuilder<double>(
-                duration: const Duration(milliseconds: 800),
-                tween: Tween(begin: 0.0, end: 1.0),
-                builder: (context, value, child) {
-                  return Opacity(
-                    opacity: value,
-                    child: Text(
-                      '$_totalRatings ${_totalRatings == 1 ? 'rating' : 'ratings'}',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: AppTheme.mediumGrey,
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 16),
-              LinearProgressIndicator(
-                value: value,
-                backgroundColor: Colors.grey[200],
-                valueColor: const AlwaysStoppedAnimation<Color>(Colors.amber),
-              ),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );

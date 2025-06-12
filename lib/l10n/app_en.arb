@@ -365,5 +365,7 @@
     "errorSavingSettings": "Error saving settings",
     "userName": "User",
     "errorLoadingUserName": "Error loading user name",
-    "medicalEquipment": "Medical Equipment"
+    "medicalEquipment": "Medical Equipment",
+    "lowRatingWarning": "Your seller rating is low. This may affect your product visibility. Please improve your service quality to get better ratings.",
+    "lowSellerRatingWarning": "Warning: This seller has a low rating. Please be cautious when making a purchase."
 }
